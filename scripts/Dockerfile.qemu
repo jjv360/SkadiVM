@@ -1,0 +1,75 @@
+# syntax=docker/dockerfile:1.4
+
+# Source system
+FROM ubuntu:noble
+
+# Qemu branch to build
+ARG QemuVersionBranch="stable-9.1"
+
+# Build architecture
+ARG AndroidCPUArch="x86_64"
+
+# Install dependencies
+RUN apt update
+RUN apt install -y build-essential git libglib2.0-dev libfdt-dev libpixman-1-dev zlib1g-dev ninja-build python3 python3-pip zip
+
+# Fetch qemu and extract it
+# Use config to skip that subhook submodule, since it's broken for some reason... Luckily it's just a testing lib and we don't need it
+WORKDIR /build
+RUN git \
+    -c submodule."UnitTestFrameworkPkg/Library/SubhookLib/subhook".update=none \
+    clone --recurse-submodules --branch ${QemuVersionBranch} --single-branch --jobs 8 https://github.com/qemu/qemu.git
+
+# Configure qemu, disable the features we don't need. The target list controls what emulated architectures will be available in the app.
+WORKDIR /build/qemu
+RUN ./configure --static \
+    --disable-docs \
+    --disable-gio \
+    --disable-tools \
+    --disable-coreaudio \
+    --disable-cocoa \
+    --disable-dbus-display \
+    --disable-dsound \
+    --disable-gtk \
+    --disable-gtk-clipboard \
+    --disable-guest-agent \
+    --disable-guest-agent-msi \
+    --disable-hv-balloon \
+    --target-list=i386-softmmu,x86_64-softmmu,aarch64-softmmu
+
+
+# Build Qemu
+RUN make -j10
+
+# Zip Qemu's assets
+WORKDIR /build/qemu/build/qemu-bundle
+RUN zip -r --verbose --junk-paths qemu-assets.zip ./usr/local/share/qemu
+
+# Add final script to copy the binaries of the architectures we support to the jniLibs folder. Since the Android project has extractNativeLibs set,
+# everything in the jniLibs folder will be extracted to the device's file system and marked as executable. An interesting workaround for the fact that
+# on newer Android OSes you are no longer allowed to run executables from the app's data directory.
+COPY <<-EOF ./finish.sh
+
+    # Remove existing files
+    rm /project/app/src/main/assets/qemu-assets.zip || true
+    rm /project/app/src/main/jniLibs/${AndroidCPUArch}/qemu-*.so || true
+
+    # Copy assets zip
+    cp --verbose qemu-assets.zip /project/app/src/main/assets/qemu-assets.zip
+
+    # Copy binaries to the right place
+    cd ./usr/local/bin/
+    for i in qemu-system-* ; do
+        cp --verbose "\$i" "/project/app/src/main/jniLibs/${AndroidCPUArch}/\$i.so"
+    done
+
+    # DEBUG: Copy entire bundle to project directory
+    # cp -r --dereference --verbose ./ /project/qemu-bundle
+
+EOF
+
+# Make script runnable
+RUN chmod +x ./finish.sh
+
+# Run command will just copy necessary files to the project directory
+CMD /bin/bash ./finish.sh
