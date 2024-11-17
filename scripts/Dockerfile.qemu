@@ -21,8 +21,11 @@ RUN git \
     clone --recurse-submodules --branch ${QemuVersionBranch} --single-branch --jobs 8 https://github.com/qemu/qemu.git
 
 # Configure qemu, disable the features we don't need. The target list controls what emulated architectures will be available in the app.
+# The PIC / PIE flags allows the binary to be imported as a library, since we can't just run executables on Android.
+ARG ExtraBuildFlags="-fPIC -fPIE -pie"
 WORKDIR /build/qemu
-RUN ./configure --static \
+RUN ./configure \
+    --static --extra-cflags="$ExtraBuildFlags" --extra-cxxflags="$ExtraBuildFlags" --extra-ldflags="$ExtraBuildFlags" \
     --disable-docs \
     --disable-gio \
     --disable-tools \
@@ -60,7 +63,7 @@ COPY <<-EOF ./finish.sh
     # Copy binaries to the right place
     cd ./usr/local/bin/
     for i in qemu-system-* ; do
-        cp --verbose "\$i" "/project/app/src/main/jniLibs/${AndroidCPUArch}/\$i.so"
+        cp --verbose "\$i" "/project/app/src/main/jniLibs/${AndroidCPUArch}/lib\$i.so"
     done
 
     # DEBUG: Copy entire bundle to project directory

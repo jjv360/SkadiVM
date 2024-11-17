@@ -32,9 +32,9 @@ class VMRunner(val ctx: Context) {
         // Got from the list of extracted jni libs
         val archs = arrayListOf<String>()
         File(ctx.applicationInfo.nativeLibraryDir).listFiles { dir, name ->
-            if (!name.startsWith("qemu-system-")) return@listFiles true
+            if (!name.startsWith("libqemu-system-")) return@listFiles true
             if (!name.endsWith(".so")) return@listFiles true
-            archs.add(name.substring(12 ..< name.length - 3))
+            archs.add(name.substring(15 ..< name.length - 3))
             return@listFiles true
         }
 
@@ -45,7 +45,7 @@ class VMRunner(val ctx: Context) {
 
     /** Get Qemu binary path for a specific architecture we want to emulate */
     private fun getQemuBinaryPath(arch: String): File {
-        return File(ctx.applicationInfo.nativeLibraryDir, "qemu-system-$arch.so")
+        return File(ctx.applicationInfo.nativeLibraryDir, "libqemu-system-$arch.so")
     }
 
     /** Extract Qemu */
@@ -69,13 +69,13 @@ class VMRunner(val ctx: Context) {
     }
 
     /** C++ function to run Qemu */
-    private external fun runQemu(workingDir: String, qemuBinary: String, cmdline: String, lineIn: (line: String) -> Unit): Int
+//    private external fun runQemu(workingDir: String, qemuBinary: String, cmdline: String, lineIn: (line: String) -> Unit): Int
 
     /** Start the VM */
     fun start() {
 
         // Load the C++ code
-        System.loadLibrary("skadivm")
+//        System.loadLibrary("skadivm")
 
         // Extract Qemu assets
         extractQemuAssets()
@@ -84,35 +84,41 @@ class VMRunner(val ctx: Context) {
         val qemuBinaryPath = getQemuBinaryPath("x86_64")
         println("Qemu assets: $qemuResourcePath")
         println("Starting Qemu at: $qemuBinaryPath")
-        val exitCode = runQemu(qemuResourcePath.absolutePath, qemuBinaryPath.absolutePath, "--help") {
-            println("Qemu: $it")
-        }
-//        val process = ProcessBuilder()
-//            .command(qemuBinaryPath.absolutePath, "--help")
-//            .directory(qemuResourcePath)
-//            .start()
-//
-//        // Ensure that if our process dies, then so does Qemu
-//        Runtime.getRuntime().addShutdownHook(object : Thread() {
-//            override fun run() {
-//                if (!process.isAlive) return
-//                println("Shutting down Qemu since we are being shut down")
-//                process.destroyForcibly()
-//            }
-//        })
-//
-//        // Print output
-//        process.inputStream.bufferedReader().forEachLine {
+//        val exitCode = runQemu(qemuResourcePath.absolutePath, qemuBinaryPath.absolutePath, "--help") {
 //            println("Qemu: $it")
 //        }
-//
-//        // Print error
-//        process.errorStream.bufferedReader().forEachLine {
-//            println("Qemu error: $it")
-//        }
+        val builder = ProcessBuilder()
+//        builder.command("sh", "-c", "set")
+//        builder.command(qemuBinaryPath.absolutePath, "--sandbox", "on,obsolete=deny,elevateprivileges=deny,resourcecontrol=deny", "--help")
+        builder.command("${ctx.applicationInfo.nativeLibraryDir}/libtestme.so")
+        builder.directory(qemuResourcePath)
+        builder.environment()["HOME"] = ctx.cacheDir.absolutePath
+        builder.environment()["SHELL"] = "/bin/sh"
+
+        // Start the process
+        val process = builder.start()
+
+        // Ensure that if our process dies, then so does Qemu
+        Runtime.getRuntime().addShutdownHook(object : Thread() {
+            override fun run() {
+                if (!process.isAlive) return
+                println("Shutting down Qemu since we are being shut down")
+                process.destroyForcibly()
+            }
+        })
+
+        // Print output
+        process.inputStream.bufferedReader().forEachLine {
+            println("Qemu: $it")
+        }
+
+        // Print error
+        process.errorStream.bufferedReader().forEachLine {
+            println("Qemu error: $it")
+        }
 
         // Wait for Qemu to exit
-//        val exitCode = process.waitFor()
+        val exitCode = process.waitFor()
         println("Qemu exited with code $exitCode")
 
     }
