@@ -2,35 +2,60 @@
 
 # Source system
 FROM ubuntu:noble
+# FROM saschpe/android-ndk:34-jdk22.0.2_9-ndk27.0.12077973-cmake3.22.1
 
 # Qemu branch to build
-ARG QemuVersionBranch="stable-9.1"
+ARG QemuVersionBranch=stable-9.1
 
-# Build architecture
-ARG AndroidCPUArch="x86_64"
+# List of architectures we want to be able to run Qemu on, NOT emulated architectures. These are Android arch codes, put into the jniLibs folder.
+ENV TargetArchs=x86_64,aarch64
+
+# List of architectures we want to support emulating. This is Qemu's target list.
+ARG TargetList=i386-softmmu,x86_64-softmmu,aarch64-softmmu
+
+
+# ------------- no more config options below this line -------------
+
+
 
 # Install dependencies
 RUN apt update
-RUN apt install -y build-essential git libglib2.0-dev libfdt-dev libpixman-1-dev zlib1g-dev ninja-build python3 python3-pip zip
+RUN apt install -y build-essential ninja-build python3 python3-pip python3-setuptools python3-wheel zip pkg-config git wget gcc make 
+RUN /bin/bash <<EOF
 
-# Fetch qemu and extract it
+    # Loop through arch's and install cross-compilers for each
+    for targetArch in \${TargetArchs//,/ } ; do
+        apt install -y gcc-\$targetArch-linux-gnu binutils-\$targetArch-linux-gnu
+    done
+
+EOF
+
+# Fetch Android NDK - we need the old v17c version, since Qemu requires GCC ... and the new NDKs only have clang
+# WORKDIR /src
+# RUN wget https://dl.google.com/android/repository/android-ndk-r17c-linux-x86_64.zip
+# RUN unzip android-ndk-r17c-linux-x86_64.zip
+# RUN mkdir -p /build && mv android-ndk-r17c /build/android-ndk
+# ENV NDK_ROOT=/build/android-ndk
+
+# Fetch qemu source
 # Use config to skip that subhook submodule, since it's broken for some reason... Luckily it's just a testing lib and we don't need it
-WORKDIR /build
+WORKDIR /src
 RUN git \
     -c submodule."UnitTestFrameworkPkg/Library/SubhookLib/subhook".update=none \
-    clone --recurse-submodules --branch ${QemuVersionBranch} --single-branch --jobs 8 https://github.com/qemu/qemu.git
+    clone --recurse-submodules --branch $QemuVersionBranch --single-branch --jobs 8 https://github.com/qemu/qemu.git
 
-# Configure qemu, disable the features we don't need. The target list controls what emulated architectures will be available in the app.
-# The PIC / PIE flags allows the binary to be imported as a library, since we can't just run executables on Android.
-ARG ExtraBuildFlags="-fPIC -fPIE -pie"
-WORKDIR /build/qemu
-RUN ./configure \
-    --static --extra-cflags="$ExtraBuildFlags" --extra-cxxflags="$ExtraBuildFlags" --extra-ldflags="$ExtraBuildFlags" \
+# Fetch glib source
+# RUN git clone --recurse-submodules --branch glib-2-80 --single-branch --jobs 8 https://github.com/GNOME/glib.git
+
+# List of build flags for Qemu
+ARG BuildFlags=\
+    --static \
     --disable-docs \
     --disable-gio \
     --disable-tools \
     --disable-coreaudio \
     --disable-cocoa \
+    --disable-curses \
     --disable-dbus-display \
     --disable-dsound \
     --disable-gtk \
@@ -38,32 +63,117 @@ RUN ./configure \
     --disable-guest-agent \
     --disable-guest-agent-msi \
     --disable-hv-balloon \
-    --target-list=i386-softmmu,x86_64-softmmu,aarch64-softmmu
-
+    --enable-tcg-interpreter --enable-system --enable-pie --enable-opengl \
+    --target-list=$TargetList
 
 # Build Qemu
-RUN make -j10
+RUN /bin/bash <<EOF
 
-# Zip Qemu's assets
-WORKDIR /build/qemu/build/qemu-bundle
-RUN zip -r --verbose --junk-paths qemu-assets.zip ./usr/local/share/qemu
+    # Loop through arch's
+    for targetArch in \${TargetArchs//,/ } ; do
+
+        # Ensure Android NDK binaries are on the path
+        # export PATH=\$PATH:\$NDK_ROOT/toolchains/\$targetArch-4.9/prebuilt/linux-x86_64/bin
+        # export PATH=\$PATH:\$NDK_ROOT/toolchains/\$targetArch-linux-android-4.9/prebuilt/linux-x86_64/bin
+
+        # Prepare build environment to use Android NDK's build tools (clang instead of gcc)
+        # export CC=\$targetArch-linux-android34-clang
+        # export LD=\$targetArch-linux-android34-clang
+        # export AR=llvm-ar
+        # export CFLAGS="--target=\$targetArch-linux-android"
+        # export LDFLAGS="--target=\$targetArch-linux-android"
+        # export SYSROOT="\$NDK_ROOT/sysroot"
+
+#         # Make a copy of Glib source for this arch
+#         echo "Copying Glib source for \$targetArch..."
+#         mkdir -p /build/glib/\$targetArch
+#         cp -r /src/glib /build/glib/\$targetArch
+#         cd /build/glib/\$targetArch
+
+#         # Create cross file
+#         cat << END > android-cross-file.txt
+
+#             [binaries]
+#             c = '\$targetArch-linux-android34-clang'
+#             cpp = '\$targetArch-linux-android34-clang++'
+#             ar = 'llvm-ar'
+#             ld = '\$targetArch-linux-android34-clan'
+
+#             [host_machine]
+#             system = 'linux'
+#             cpu_family = 'x86_64'
+#             cpu = 'x86_64'
+#             endian = 'little'
+
+#             [properties]
+#             sys_root = '\$NDK_ROOT/toolchains/llvm/prebuilt/linux-x86_64/sysroot/usr'
+
+# END
+
+#         # Build glib
+#         echo "Building GLib..."
+#         meson setup --cross-file android-cross-file.txt || exit 1
+#         ninja || exit 1
+#         ninja install || exit 1
+
+        # Make a copy of Qemu source for this arch
+        # echo "Copying Qemu source for \$targetArch..."
+        # mkdir -p "/build/qemu/\$targetArch"
+        # cp -r /src/qemu/. "/build/qemu/\$targetArch"
+        # cd "/build/qemu/\$targetArch"
+
+        # Build Qemu
+        echo "Configuring Qemu build..."
+        cd /src/qemu
+        ./configure \
+            --cross-prefix=\$targetArch-linux-gnu- \
+            --prefix=/build/qemu/\$targetArch \
+            $BuildFlags \
+            || exit 1
+
+        # Build
+        echo "Building Qemu..."
+        make -j10 || exit 1
+        make install || exit 1
+
+    done
+
+EOF
+
+# At this point, the following files should exist:
+# /build/qemu/<target-arch>/usr/local/bin/qemu-system-<emulated-arch> - The binaries
+# /build/qemu/<target-arch>/usr/local/share/qemu - The assets
+
+# Zip Qemu's assets, just use the ones from the ARM64 build since they are the same for all builds
+WORKDIR /
+RUN zip -r --verbose --junk-paths qemu-assets.zip /build/qemu/aarch64/usr/local/share/qemu
 
 # Add final script to copy the binaries of the architectures we support to the jniLibs folder. Since the Android project has extractNativeLibs set,
 # everything in the jniLibs folder will be extracted to the device's file system and marked as executable. An interesting workaround for the fact that
 # on newer Android OSes you are no longer allowed to run executables from the app's data directory.
-COPY <<-EOF ./finish.sh
+COPY <<-EOF /finish.sh
 
     # Remove existing files
     rm /project/app/src/main/assets/qemu-assets.zip || true
-    rm /project/app/src/main/jniLibs/${AndroidCPUArch}/qemu-*.so || true
+    rm /project/app/src/main/jniLibs/*/qemu-*.so || true
 
     # Copy assets zip
-    cp --verbose qemu-assets.zip /project/app/src/main/assets/qemu-assets.zip
+    cp --verbose /qemu-assets.zip /project/app/src/main/assets/qemu-assets.zip
 
-    # Copy binaries to the right place
-    cd ./usr/local/bin/
-    for i in qemu-system-* ; do
-        cp --verbose "\$i" "/project/app/src/main/jniLibs/${AndroidCPUArch}/lib\$i.so"
+    # Copy binaries to the right place.
+    # From: /build/<target-arch>/build/qemu-bundle/usr/local/bin/<emulated-arch-executable>
+    # To: /project/app/src/main/jniLibs/<target-arch>/lib<emulated-arch-executable>.so
+    cd /build/qemu
+    for targetArch in * ; do
+
+        # Make sure arch folder in jniLibs exists
+        mkdir -p /project/app/src/main/jniLibs/\$targetArch
+
+        # Copy each emulated arch's binary
+        for emulatedArch in qemu-system-* ; do
+            cp --verbose "/build/qemu/\$targetArch/usr/local/bin/\$emulatedArch" "/project/app/src/main/jniLibs/\$targetArch/lib\$emulatedArch.so"
+        done
+
     done
 
     # DEBUG: Copy entire bundle to project directory
@@ -72,7 +182,7 @@ COPY <<-EOF ./finish.sh
 EOF
 
 # Make script runnable
-RUN chmod +x ./finish.sh
+RUN chmod +x /finish.sh
 
 # Run command will just copy necessary files to the project directory
-CMD /bin/bash ./finish.sh
+CMD /bin/bash /finish.sh

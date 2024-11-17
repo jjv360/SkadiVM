@@ -5,10 +5,7 @@
     "description": "A tool for running virtual machines on Android.",
     "scripts": {
         "build:qemu:_": "Builds Qemu for supported target architectures, ie the devices our app will run on, NOT the emulated architectures. Those are set in Dockerfile.qemu.",
-        "build:qemu:dobuild": "npx -p cross-env cross-env-shell docker build --tag skadivm-qemu-builder-$ANDROID_ARCH --build-arg AndroidCPUArch=$ANDROID_ARCH --file ./scripts/Dockerfile.qemu --platform $DOCKER_PLATFORM . && npx -p cross-env cross-env-shell docker run --rm --platform $DOCKER_PLATFORM --mount type=bind,source=.,target=/project skadivm-qemu-builder-$ANDROID_ARCH",
-        "build:qemu:x86_64": "npx -p cross-env cross-env-shell ANDROID_ARCH=x86_64 DOCKER_PLATFORM=\"linux/amd64\" npm run build:qemu:dobuild",
-        "build:qemu:arm64": "npx -p cross-env cross-env-shell ANDROID_ARCH=arm64-v8a DOCKER_PLATFORM=\"linux/arm64\" npm run build:qemu:dobuild",
-        "build:qemu": "npm run build:qemu:x86_64 && npm run build:qemu:arm64"
+        "build:qemu": "npx -p cross-env cross-env-shell docker build --tag skadivm-qemu-builder --file ./scripts/Dockerfile.qemu --platform linux/amd64 . && npx -p cross-env cross-env-shell docker run --rm --platform linux/amd64 --mount type=bind,source=.,target=/project skadivm-qemu-builder"
     },
     "author": "jjv360",
     "license": "ISC"
