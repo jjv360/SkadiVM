@@ -7,7 +7,7 @@ FROM saschpe/android-ndk:34-jdk22.0.2_9-ndk27.0.12077973-cmake3.22.1
 # Qemu branch to build
 ARG QemuVersionBranch=stable-9.1
 
-# List of architectures we want to be able to run Qemu on, NOT emulated architectures. These are Android arch codes, put into the jniLibs folder.
+# List of architectures we want to be able to run Qemu on, NOT emulated architectures. These are Linux arch codes.
 ENV TargetArchs=x86_64,aarch64
 
 # List of architectures we want to support emulating. This is Qemu's target list.
@@ -45,8 +45,8 @@ RUN /bin/bash <<EOF
 
         # Copy Android sysroot for this arch
         echo "Copying Android sysroot for \$targetArch..."
-        mkdir -p "/build/sysroot/\$targetArch"
-        cp -r --dereference "\$NDK_ROOT/toolchains/llvm/prebuilt/linux-x86_64/sysroot/." "/build/sysroot/\$targetArch"
+        mkdir -p "/sysroot/\$targetArch"
+        cp -r --dereference "\$NDK_ROOT/toolchains/llvm/prebuilt/linux-x86_64/sysroot/." "/sysroot/\$targetArch"
 
     done
 
@@ -58,10 +58,10 @@ COPY <<-EOF /setup.sh
     # Ensure Android NDK binaries are on the path
     echo "Preparing to build for \$1..."
     export TOOLCHAIN=\$NDK_ROOT/toolchains/llvm/prebuilt/linux-x86_64
-    export PATH=\$PATH:\$TOOLCHAIN/bin
+    export PATH=\$TOOLCHAIN/bin:\$PATH
 
     # Prepare build environment to use Android NDK's build tools (clang instead of gcc)
-    export SYSROOT="/build/sysroot/\$1"
+    export SYSROOT="/sysroot/\$1"
     export ANDROID_LIBS="\$SYSROOT/usr/lib/\$1-linux-android/34/"
     export PKG_CONFIG_SYSROOT_DIR="\$SYSROOT"
     export PKG_CONFIG_PATH="\$SYSROOT/lib/pkgconfig"
@@ -74,8 +74,8 @@ COPY <<-EOF /setup.sh
     export STRIP="\$TOOLCHAIN/bin/llvm-strip"
     export RANLIB="\$TOOLCHAIN/bin/llvm-ranlib"
     export NM="\$TOOLCHAIN/bin/llvm-nm"
-    export CFLAGS="--target=\$1-none-linux-android34 --sysroot=\$SYSROOT -fPIE -fPIC -DTEST_FREXPL_DECL=1 -DANDROID=1"
-    export LDFLAGS="--target=\$1-none-linux-android34 --sysroot=\$SYSROOT -pie -fPIE -L\$ANDROID_LIBS"
+    export CFLAGS="--target=\$1-none-linux-android34 --sysroot=\$SYSROOT -DTEST_FREXPL_DECL=1 -DANDROID=1 -fPIE -fPIC -O3"
+    export LDFLAGS="--target=\$1-none-linux-android34 --sysroot=\$SYSROOT -L\$ANDROID_LIBS -L\$SYSROOT/lib -L\$SYSROOT/usr/lib -fPIC -fPIE -pie -O3"
 
     # Setup cross-compilation file for meson based builds
     cat <<EOF2 > "/build/cross-file-\$1.txt"
@@ -128,6 +128,12 @@ RUN /bin/bash <<EOF # Build libiconv
         ./configure --host="\$targetArch-linux-android34" --prefix="\$SYSROOT" --exec-prefix="\$SYSROOT" --enable-static || exit 1
         make -j\$(nproc) || exit 1
         make install || exit 1
+
+        # Test that it was actually installed
+        echo -e "\\nTesting for installation..."
+        find "\$SYSROOT" -name "*iconv*"
+        # \$targetArch-linux-android34-pkg-config --libs --print-errors iconv || exit 1
+        # NOTE: iconv doesn't have pkg-config files, so we can't test it like this. We can ensure it's paths are in CFLAGS and LDFLAGS though.
         
     done
 
@@ -150,16 +156,28 @@ RUN /bin/bash <<EOF # Build glibc
         # Build glib
         # See: https://docs.gtk.org/glib/building.html
         echo "Building GLib..."
-        meson setup "_build" --prefix="\$SYSROOT" --cross-file "/build/cross-file-\$targetArch.txt"  || exit 1
+        meson setup "_build" --prefix="\$SYSROOT" --cross-file "/build/cross-file-\$targetArch.txt" -Ddefault_library=both || exit 1
         meson compile -C "_build" -j\$(nproc) || exit 1
         meson install -C "_build" || exit 1
 
         # Test that it was actually installed
         echo -e "\\nTesting for installation..."
-        find "\$SYSROOT" -name "glib-2.0.pc"
-        \$targetArch-linux-android34-pkg-config --exists --print-errors glib-2.0 || exit 1
+        find "\$SYSROOT" -name "*glib-2.0*"
+        \$targetArch-linux-android34-pkg-config --libs --print-errors glib-2.0 || exit 1
 
     done
+
+EOF
+
+# Patch Qemu
+RUN /bin/bash <<EOF # Patch Qemu
+
+    # Patch shm_open/shm_unlink shims out of Qemu since Android doesn't support it, and they don't have a config option to disable it that I can find
+    # TODO: Android has ashmem instead, maybe shim that in instead?
+    sed -i -e '/hostmem-shm/s/^/#/' /src/qemu/backends/meson.build
+
+    # Comment out all tests
+    sed -i -e "/subdir('tests')/s/^/#/" /src/qemu/meson.build
 
 EOF
 
@@ -182,10 +200,6 @@ RUN /bin/bash <<EOF # Build Qemu
         # echo \$?
         # exit 2
 
-        # Copy libnuma header to sysroot
-        cd "\$SYSROOT/usr/include"
-        wget https://raw.githubusercontent.com/numactl/numactl/refs/heads/master/libnuma.c
-
         # Make a copy of the source folder for this arch
         mkdir -p /build/qemu/\$targetArch
         cp -r /src/qemu/. "/build/qemu/\$targetArch"
@@ -195,15 +209,18 @@ RUN /bin/bash <<EOF # Build Qemu
         # I would have liked --enable-pie but apparently Qemu is incorrectly detecting that it's not supported...
         echo "Configuring Qemu build..."
         ./configure                                                                 \
-            --cross-prefix="\$targetArch-linux-android34-"                          \
             --prefix="\$SYSROOT"                                                    \
-            --static                                                                \
+            --cross-prefix="\$targetArch-linux-android34-"                          \
+            --extra-cflags="\$CFLAGS"                                               \
+            --extra-ldflags="\$LDFLAGS"                                             \
             --target-list=$TargetList                                               \
             --without-default-features                                              \
             --disable-werror                                                        \
             --enable-system                                                         \
             --enable-strip                                                          \
-            --enable-numa                                                           \
+            --enable-stack-protector                                                \
+            --enable-pie                                                            \
+            --enable-lto                                                            \
             || exit 1
 
         # Build
@@ -215,13 +232,23 @@ RUN /bin/bash <<EOF # Build Qemu
 
 EOF
 
-# At this point, the following files should exist:
-# /build/qemu/<target-arch>/usr/local/bin/qemu-system-<emulated-arch> - The binaries
-# /build/qemu/<target-arch>/usr/local/share/qemu - The assets
+# Cleanup, delete downloaded source and build directories
+RUN /bin/bash <<EOF # Clean
+
+    # Delete source and build directories
+    rm -rf /src
+    rm -rf /build
+
+EOF
 
 # Zip Qemu's assets, just use the ones from the ARM64 build since they are the same for all builds
 WORKDIR /
-RUN zip -r --verbose --junk-paths qemu-assets.zip "/build/sysroot/aarch64/usr/local/share/qemu"
+RUN zip -r --verbose --junk-paths qemu-assets.zip "/sysroot/aarch64/share/qemu"
+
+# At this point, the following files should exist:
+# /sysroot/<target-arch>/bin/qemu-system-<emulated-arch> - The binaries
+# /sysroot/<target-arch>/lib/ - The dynamic libraries
+# /qemu-assets.zip - The assets
 
 # Add final script to copy the binaries of the architectures we support to the jniLibs folder. Since the Android project has extractNativeLibs set,
 # everything in the jniLibs folder will be extracted to the device's file system and marked as executable. An interesting workaround for the fact that
@@ -230,24 +257,38 @@ COPY <<-EOF /finish.sh
 
     # Remove existing files
     rm /project/app/src/main/assets/qemu-assets.zip || true
-    rm /project/app/src/main/jniLibs/*/qemu-*.so || true
+    rm -rf /project/app/src/main/jniLibs || true
 
     # Copy assets zip
-    cp --verbose /qemu-assets.zip /project/app/src/main/assets/qemu-assets.zip
+    mkdir -p /project/app/src/main/assets
+    cp --verbose /qemu-assets.zip /project/app/src/main/assets/qemu-assets.zip || exit 1
 
     # Copy binaries to the right place.
-    # From: /build/<target-arch>/build/qemu-bundle/usr/local/bin/<emulated-arch-executable>
-    # To: /project/app/src/main/jniLibs/<target-arch>/lib<emulated-arch-executable>.so
-    cd /build/qemu
-    for targetArch in * ; do
+    for targetArch in \${TargetArchs//,/ } ; do
 
-        # Make sure arch folder in jniLibs exists
-        mkdir -p /project/app/src/main/jniLibs/\$targetArch
+        # Map linux arch codes to android ones
+        if [ "\$targetArch" = "x86_64" ] ; then
+            androidArch="x86_64"
+        elif [ "\$targetArch" = "aarch64" ] ; then
+            androidArch="arm64-v8a"
+        else
+            echo "Unknown target arch: \$targetArch - using as is"
+            androidArch="\$targetArch"
+        fi
+
+        # Make sure the right jniLibs folder exists
+        mkdir -p "/project/app/src/main/jniLibs/\$androidArch"
 
         # Copy each emulated arch's binary
-        for emulatedArch in qemu-system-* ; do
-            cp --verbose "/build/sysroot/\$targetArch/usr/local/bin/\$emulatedArch" "/project/app/src/main/jniLibs/\$targetArch/lib\$emulatedArch.so"
+        cd "/sysroot/\$targetArch/bin"
+        for emulatedArchBinary in qemu-system-* ; do
+            cp --verbose "\$emulatedArchBinary" "/project/app/src/main/jniLibs/\$androidArch/lib\$emulatedArchBinary.so" || exit 1
         done
+
+        # Copy the required dynamic libraries as well
+        cp --verbose "/sysroot/\$targetArch/lib/libglib-2.0.so" "/project/app/src/main/jniLibs/\$androidArch/" || exit 1
+        cp --verbose "/sysroot/\$targetArch/lib/libintl.so" "/project/app/src/main/jniLibs/\$androidArch/" || exit 1
+        cp --verbose "/sysroot/\$targetArch/lib/libiconv.so" "/project/app/src/main/jniLibs/\$androidArch/" || exit 1
 
     done
 

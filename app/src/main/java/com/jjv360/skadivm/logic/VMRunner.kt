@@ -24,12 +24,12 @@ class VMRunner(val ctx: Context) {
 
     /** Get Qemu resource path */
     private val qemuResourcePath
-        get() = File(ctx.cacheDir, "qemu-assets-v9.1-2")
+        get() = File(ctx.cacheDir, "qemu-assets-v9.1-3")
 
     /** Get list of supported architectures for emulation */
     fun getEmulationArchitectures(): ArrayList<String> {
 
-        // Got from the list of extracted jni libs
+        // Get from the list of extracted jni libs
         val archs = arrayListOf<String>()
         File(ctx.applicationInfo.nativeLibraryDir).listFiles { dir, name ->
             if (!name.startsWith("libqemu-system-")) return@listFiles true
@@ -110,20 +110,18 @@ class VMRunner(val ctx: Context) {
         // Extract Qemu assets
         extractQemuAssets()
 
-        // Run it
+        // Build process
         val qemuBinaryPath = getQemuBinaryPath("x86_64")
         println("Qemu assets: $qemuResourcePath")
         println("Starting Qemu at: $qemuBinaryPath")
-//        val exitCode = runQemu(qemuResourcePath.absolutePath, qemuBinaryPath.absolutePath, "--help") {
-//            println("Qemu: $it")
-//        }
         val builder = ProcessBuilder()
-//        builder.command("sh", "-c", "set")
-//        builder.command(qemuBinaryPath.absolutePath, "--help")
-        builder.command("${ctx.applicationInfo.nativeLibraryDir}/testme.so")
+        builder.command(qemuBinaryPath.absolutePath, "--help")
         builder.directory(qemuResourcePath)
-        builder.environment()["HOME"] = ctx.cacheDir.absolutePath
-        builder.environment()["SHELL"] = "/bin/sh"
+
+        // Add our lib directory to the linker directories so it can find dynamic libs
+        val existingLibPath = System.getenv("LD_LIBRARY_PATH")
+        val ourLibPath = ctx.applicationInfo.nativeLibraryDir
+        builder.environment()["LD_LIBRARY_PATH"] = "$ourLibPath:$existingLibPath"
 
         // Start the process
         val process = builder.start()
