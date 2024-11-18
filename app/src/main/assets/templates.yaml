@@ -1,0 +1,12 @@
+#
+# Defines VM templates for easy set up
+
+win98:
+    name: Windows 98
+    arch: x86_64
+    disk:
+        - size: 1G
+    files:
+        - installer: https://archive.org/download/windows-98-se-retail/Windows%2098%20SE%20%28Retail%29.iso
+    qemu:
+        - 

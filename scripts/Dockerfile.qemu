@@ -37,6 +37,13 @@ RUN git clone --recurse-submodules --branch 2.83.0 --single-branch --jobs 8 http
 RUN wget https://ftp.gnu.org/pub/gnu/libiconv/libiconv-1.17.tar.gz
 RUN tar -xvf libiconv-1.17.tar.gz
 
+# Fetch pixman source
+RUN git clone --recurse-submodules --branch pixman-0.44.0 --single-branch --jobs 8 https://gitlab.freedesktop.org/pixman/pixman.git
+
+# Fetch libjpeg source
+RUN wget https://www.ijg.org/files/jpegsrc.v9f.tar.gz
+RUN tar -xvf jpegsrc.v9f.tar.gz
+
 # Make a copy of the Android sysroot for each target
 RUN /bin/bash <<EOF
 
@@ -125,7 +132,7 @@ RUN /bin/bash <<EOF # Build libiconv
 
         # Build libiconv
         echo "Building libiconv..."
-        ./configure --host="\$targetArch-linux-android34" --prefix="\$SYSROOT" --exec-prefix="\$SYSROOT" --enable-static || exit 1
+        ./configure --host="\$targetArch-linux-android34" --prefix="\$SYSROOT" --exec-prefix="\$SYSROOT" || exit 1
         make -j\$(nproc) || exit 1
         make install || exit 1
 
@@ -133,6 +140,36 @@ RUN /bin/bash <<EOF # Build libiconv
         echo -e "\\nTesting for installation..."
         find "\$SYSROOT" -name "*iconv*"
         # \$targetArch-linux-android34-pkg-config --libs --print-errors iconv || exit 1
+        # NOTE: iconv doesn't have pkg-config files, so we can't test it like this. We can ensure it's paths are in CFLAGS and LDFLAGS though.
+        
+    done
+
+EOF
+
+# Build libjpeg for each target
+RUN /bin/bash <<EOF # Build libjpeg
+
+    # Loop through arch's
+    for targetArch in \${TargetArchs//,/ } ; do
+
+        # Setup build environment
+        source /setup.sh "\$targetArch"
+
+        # Make a copy of the source folder for this arch
+        mkdir -p /build/jpeg-9f/\$targetArch
+        cp -r /src/jpeg-9f/. "/build/jpeg-9f/\$targetArch"
+        cd "/build/jpeg-9f/\$targetArch"
+
+        # Build
+        echo "Building libjpeg..."
+        ./configure --host="\$targetArch-linux-android34" --prefix="\$SYSROOT" --exec-prefix="\$SYSROOT" || exit 1
+        make -j\$(nproc) || exit 1
+        make install || exit 1
+
+        # Test that it was actually installed
+        echo -e "\\nTesting for installation..."
+        find "\$SYSROOT" -name "*libjpeg*"
+        \$targetArch-linux-android34-pkg-config --libs --print-errors libjpeg || exit 1
         # NOTE: iconv doesn't have pkg-config files, so we can't test it like this. We can ensure it's paths are in CFLAGS and LDFLAGS though.
         
     done
@@ -156,7 +193,7 @@ RUN /bin/bash <<EOF # Build glibc
         # Build glib
         # See: https://docs.gtk.org/glib/building.html
         echo "Building GLib..."
-        meson setup "_build" --prefix="\$SYSROOT" --cross-file "/build/cross-file-\$targetArch.txt" -Ddefault_library=both || exit 1
+        meson setup "_build" --prefix="\$SYSROOT" --cross-file "/build/cross-file-\$targetArch.txt" || exit 1
         meson compile -C "_build" -j\$(nproc) || exit 1
         meson install -C "_build" || exit 1
 
@@ -164,6 +201,35 @@ RUN /bin/bash <<EOF # Build glibc
         echo -e "\\nTesting for installation..."
         find "\$SYSROOT" -name "*glib-2.0*"
         \$targetArch-linux-android34-pkg-config --libs --print-errors glib-2.0 || exit 1
+
+    done
+
+EOF
+
+# Build pixman for each target
+RUN /bin/bash <<EOF # Build pixman
+
+    # Loop through arch's
+    for targetArch in \${TargetArchs//,/ } ; do
+
+        # Setup build environment
+        source /setup.sh "\$targetArch"
+
+        # Make a copy of the source folder for this arch
+        mkdir -p /build/pixman/\$targetArch
+        cp -r /src/pixman/. "/build/pixman/\$targetArch"
+        cd "/build/pixman/\$targetArch"
+
+        # Build
+        echo "Building Pixman..."
+        meson setup "_build" --prefix="\$SYSROOT" --cross-file "/build/cross-file-\$targetArch.txt" || exit 1
+        meson compile -C "_build" -j\$(nproc) || exit 1
+        meson install -C "_build" || exit 1
+
+        # Test that it was actually installed
+        echo -e "\\nTesting for installation..."
+        find "\$SYSROOT" -name "*pixman-1*"
+        \$targetArch-linux-android34-pkg-config --libs --print-errors pixman-1 || exit 1
 
     done
 
@@ -221,6 +287,9 @@ RUN /bin/bash <<EOF # Build Qemu
             --enable-stack-protector                                                \
             --enable-pie                                                            \
             --enable-lto                                                            \
+            --enable-pixman                                                         \
+            --enable-vnc                                                            \
+            --enable-vnc-jpeg                                                       \
             || exit 1
 
         # Build
@@ -285,10 +354,15 @@ COPY <<-EOF /finish.sh
             cp --verbose "\$emulatedArchBinary" "/project/app/src/main/jniLibs/\$androidArch/lib\$emulatedArchBinary.so" || exit 1
         done
 
+        # Copy utilities
+        cp --verbose "/sysroot/\$targetArch/bin/qemu-img" "/project/app/src/main/jniLibs/\$androidArch/libqemu-img.so" || exit 1
+
         # Copy the required dynamic libraries as well
         cp --verbose "/sysroot/\$targetArch/lib/libglib-2.0.so" "/project/app/src/main/jniLibs/\$androidArch/" || exit 1
         cp --verbose "/sysroot/\$targetArch/lib/libintl.so" "/project/app/src/main/jniLibs/\$androidArch/" || exit 1
         cp --verbose "/sysroot/\$targetArch/lib/libiconv.so" "/project/app/src/main/jniLibs/\$androidArch/" || exit 1
+        cp --verbose "/sysroot/\$targetArch/lib/libpixman-1.so" "/project/app/src/main/jniLibs/\$androidArch/" || exit 1
+        cp --verbose "/sysroot/\$targetArch/lib/libjpeg.so" "/project/app/src/main/jniLibs/\$androidArch/" || exit 1
 
     done
 

@@ -5,12 +5,10 @@ import androidx.activity.ComponentActivity
 import androidx.activity.compose.setContent
 import androidx.activity.enableEdgeToEdge
 import androidx.compose.foundation.layout.ExperimentalLayoutApi
-import androidx.compose.foundation.layout.FlowColumn
 import androidx.compose.foundation.layout.FlowRow
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.padding
-import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Scaffold
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
@@ -19,13 +17,10 @@ import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.tooling.preview.Devices
 import androidx.compose.ui.tooling.preview.Preview
-import androidx.compose.ui.unit.TextUnit
-import androidx.compose.ui.unit.TextUnitType
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.em
-import com.jjv360.skadivm.logic.VMRunner
+import com.jjv360.skadivm.logic.Qemu
 import com.jjv360.skadivm.ui.VMRenderer
-import com.jjv360.skadivm.ui.theme.SkadiVMColorScheme
 import com.jjv360.skadivm.ui.theme.SkadiVMTheme
 
 class MainActivity : ComponentActivity() {
@@ -34,8 +29,11 @@ class MainActivity : ComponentActivity() {
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
 
-        // Start qemu
-        val runner = VMRunner(this).start()
+        // Start Qemu with VNC
+        val qemu = Qemu(this).start("x86_64", arrayOf(
+            "-m", "128",                                        // <-- RAM size
+            "-display", "vnc=localhost:0,to=99,id=default",     // <-- VNC support, with listening host and port
+        ))
 
         // Setup UI
         enableEdgeToEdge()

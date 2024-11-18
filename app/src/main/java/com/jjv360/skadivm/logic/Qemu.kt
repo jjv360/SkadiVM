@@ -4,23 +4,8 @@ import android.content.Context
 import com.jjv360.skadivm.utils.extractZip
 import java.io.File
 
-
-class VMRunner(val ctx: Context) {
-
-    /** Get current device architecture */
-//    val architecture : String
-//        get() {
-//
-//            // Get system arch
-//            val arch = System.getProperty("os.arch") ?: ""
-//
-//            // Convert to our format
-//            if (arch.startsWith("armeabi")) return "arm"
-//            if (arch.startsWith("arm64")) return "aarch64"
-//            if (arch.startsWith("x86_64")) return "x86_64"
-//            return "unknown_arch"
-//
-//        }
+/** Interface with the Qemu binaries */
+class Qemu(private val ctx: Context) {
 
     /** Get Qemu resource path */
     private val qemuResourcePath
@@ -71,23 +56,49 @@ class VMRunner(val ctx: Context) {
 
     }
 
-    /** C++ function to run Qemu */
-//    private external fun runQemu(workingDir: String, qemuBinary: String, cmdline: String, lineIn: (line: String) -> Unit): Int
+    /** Run the Qemu process */
+    private fun runQemu(arch: String, args: Array<String>): Process {
+
+        // Extract Qemu assets
+        extractQemuAssets()
+
+        // Build process
+        val qemuBinaryPath = getQemuBinaryPath(arch)
+        val builder = ProcessBuilder()
+        builder.command(qemuBinaryPath.absolutePath, *args)
+        builder.directory(qemuResourcePath)
+
+        // Add our lib directory to the linker directories so it can find dynamic libs
+        val existingLibPath = System.getenv("LD_LIBRARY_PATH")
+        val ourLibPath = ctx.applicationInfo.nativeLibraryDir
+        builder.environment()["LD_LIBRARY_PATH"] = "$ourLibPath:$existingLibPath"
+
+        // Start the process
+        return builder.start()
+
+    }
+
+    /** True if Qemu is currently running */
+    val isRunning : Boolean
+        get() = thread?.isAlive ?: false
 
     /** Start the VM */
-    fun start() {
+    fun start(arch: String, qemuFlags: Array<String>): Qemu {
 
         // Do nothing if already started
-        if (thread != null)
-            return
+        if (isRunning)
+            throw Exception("Qemu is already running.")
 
         // Create thread
         thread = Thread() {
-            runThread()
+            runThread(arch, qemuFlags)
         }
 
         // Start thread
         thread!!.start()
+
+        // Chainable
+        return this
 
     }
 
@@ -102,29 +113,13 @@ class VMRunner(val ctx: Context) {
     }
 
     /** VM process thread */
-    private fun runThread() {
-
-        // Load the C++ code
-//        System.loadLibrary("skadivm")
-
-        // Extract Qemu assets
-        extractQemuAssets()
-
-        // Build process
-        val qemuBinaryPath = getQemuBinaryPath("x86_64")
-        println("Qemu assets: $qemuResourcePath")
-        println("Starting Qemu at: $qemuBinaryPath")
-        val builder = ProcessBuilder()
-        builder.command(qemuBinaryPath.absolutePath, "--help")
-        builder.directory(qemuResourcePath)
-
-        // Add our lib directory to the linker directories so it can find dynamic libs
-        val existingLibPath = System.getenv("LD_LIBRARY_PATH")
-        val ourLibPath = ctx.applicationInfo.nativeLibraryDir
-        builder.environment()["LD_LIBRARY_PATH"] = "$ourLibPath:$existingLibPath"
+    private fun runThread(arch: String, qemuFlags: Array<String>) {
 
         // Start the process
-        val process = builder.start()
+        println("[Qemu] Assets: $qemuResourcePath")
+        println("[Qemu] Binary: ${getQemuBinaryPath(arch)}")
+        println("[Qemu] Starting process...")
+        val process = runQemu(arch, qemuFlags)
 
         // Ensure that if our process dies, then so does Qemu
         Runtime.getRuntime().addShutdownHook(object : Thread() {
@@ -137,12 +132,12 @@ class VMRunner(val ctx: Context) {
 
         // Print output
         process.inputStream.bufferedReader().forEachLine {
-            println("Qemu: $it")
+            println("[Qemu]: $it")
         }
 
         // Print error
         process.errorStream.bufferedReader().forEachLine {
-            println("Qemu error: $it")
+            println("[Qemu]: $it")
         }
 
         // Wait for Qemu to exit
