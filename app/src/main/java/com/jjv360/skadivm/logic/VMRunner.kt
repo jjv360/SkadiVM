@@ -48,6 +48,9 @@ class VMRunner(val ctx: Context) {
         return File(ctx.applicationInfo.nativeLibraryDir, "libqemu-system-$arch.so")
     }
 
+    /** Process thread */
+    private var thread : Thread? = null
+
     /** Extract Qemu */
     private fun extractQemuAssets() {
 
@@ -74,6 +77,33 @@ class VMRunner(val ctx: Context) {
     /** Start the VM */
     fun start() {
 
+        // Do nothing if already started
+        if (thread != null)
+            return
+
+        // Create thread
+        thread = Thread() {
+            runThread()
+        }
+
+        // Start thread
+        thread!!.start()
+
+    }
+
+    /** Stop the VM */
+    fun stop() {
+
+        // Stop the thread
+        thread?.interrupt()
+        thread?.stop()
+        thread = null
+
+    }
+
+    /** VM process thread */
+    private fun runThread() {
+
         // Load the C++ code
 //        System.loadLibrary("skadivm")
 
@@ -89,8 +119,8 @@ class VMRunner(val ctx: Context) {
 //        }
         val builder = ProcessBuilder()
 //        builder.command("sh", "-c", "set")
-//        builder.command(qemuBinaryPath.absolutePath, "--sandbox", "on,obsolete=deny,elevateprivileges=deny,resourcecontrol=deny", "--help")
-        builder.command("${ctx.applicationInfo.nativeLibraryDir}/libtestme.so")
+//        builder.command(qemuBinaryPath.absolutePath, "--help")
+        builder.command("${ctx.applicationInfo.nativeLibraryDir}/testme.so")
         builder.directory(qemuResourcePath)
         builder.environment()["HOME"] = ctx.cacheDir.absolutePath
         builder.environment()["SHELL"] = "/bin/sh"

@@ -1,8 +1,8 @@
 # syntax=docker/dockerfile:1.4
 
 # Source system
-FROM ubuntu:noble
-# FROM saschpe/android-ndk:34-jdk22.0.2_9-ndk27.0.12077973-cmake3.22.1
+# FROM ubuntu:noble
+FROM saschpe/android-ndk:34-jdk22.0.2_9-ndk27.0.12077973-cmake3.22.1
 
 # Qemu branch to build
 ARG QemuVersionBranch=stable-9.1
@@ -21,21 +21,7 @@ ARG TargetList=i386-softmmu,x86_64-softmmu,aarch64-softmmu
 # Install dependencies
 RUN apt update
 RUN apt install -y build-essential ninja-build python3 python3-pip python3-setuptools python3-wheel zip pkg-config git wget gcc make 
-RUN /bin/bash <<EOF
-
-    # Loop through arch's and install cross-compilers for each
-    for targetArch in \${TargetArchs//,/ } ; do
-        apt install -y gcc-\$targetArch-linux-gnu binutils-\$targetArch-linux-gnu
-    done
-
-EOF
-
-# Fetch Android NDK - we need the old v17c version, since Qemu requires GCC ... and the new NDKs only have clang
-# WORKDIR /src
-# RUN wget https://dl.google.com/android/repository/android-ndk-r17c-linux-x86_64.zip
-# RUN unzip android-ndk-r17c-linux-x86_64.zip
-# RUN mkdir -p /build && mv android-ndk-r17c /build/android-ndk
-# ENV NDK_ROOT=/build/android-ndk
+RUN pip3 install --break-system-packages meson packaging
 
 # Fetch qemu source
 # Use config to skip that subhook submodule, since it's broken for some reason... Luckily it's just a testing lib and we don't need it
@@ -45,95 +31,184 @@ RUN git \
     clone --recurse-submodules --branch $QemuVersionBranch --single-branch --jobs 8 https://github.com/qemu/qemu.git
 
 # Fetch glib source
-# RUN git clone --recurse-submodules --branch glib-2-80 --single-branch --jobs 8 https://github.com/GNOME/glib.git
+RUN git clone --recurse-submodules --branch 2.83.0 --single-branch --jobs 8 https://github.com/GNOME/glib.git
 
-# List of build flags for Qemu
-ARG BuildFlags=\
-    --static \
-    --disable-docs \
-    --disable-gio \
-    --disable-tools \
-    --disable-coreaudio \
-    --disable-cocoa \
-    --disable-curses \
-    --disable-dbus-display \
-    --disable-dsound \
-    --disable-gtk \
-    --disable-gtk-clipboard \
-    --disable-guest-agent \
-    --disable-guest-agent-msi \
-    --disable-hv-balloon \
-    --enable-tcg-interpreter --enable-system --enable-pie --enable-opengl \
-    --target-list=$TargetList
+# Fetch libiconv source
+RUN wget https://ftp.gnu.org/pub/gnu/libiconv/libiconv-1.17.tar.gz
+RUN tar -xvf libiconv-1.17.tar.gz
 
-# Build Qemu
+# Make a copy of the Android sysroot for each target
 RUN /bin/bash <<EOF
 
     # Loop through arch's
     for targetArch in \${TargetArchs//,/ } ; do
 
-        # Ensure Android NDK binaries are on the path
-        # export PATH=\$PATH:\$NDK_ROOT/toolchains/\$targetArch-4.9/prebuilt/linux-x86_64/bin
-        # export PATH=\$PATH:\$NDK_ROOT/toolchains/\$targetArch-linux-android-4.9/prebuilt/linux-x86_64/bin
+        # Copy Android sysroot for this arch
+        echo "Copying Android sysroot for \$targetArch..."
+        mkdir -p "/build/sysroot/\$targetArch"
+        cp -r --dereference "\$NDK_ROOT/toolchains/llvm/prebuilt/linux-x86_64/sysroot/." "/build/sysroot/\$targetArch"
 
-        # Prepare build environment to use Android NDK's build tools (clang instead of gcc)
-        # export CC=\$targetArch-linux-android34-clang
-        # export LD=\$targetArch-linux-android34-clang
-        # export AR=llvm-ar
-        # export CFLAGS="--target=\$targetArch-linux-android"
-        # export LDFLAGS="--target=\$targetArch-linux-android"
-        # export SYSROOT="\$NDK_ROOT/sysroot"
+    done
 
-#         # Make a copy of Glib source for this arch
-#         echo "Copying Glib source for \$targetArch..."
-#         mkdir -p /build/glib/\$targetArch
-#         cp -r /src/glib /build/glib/\$targetArch
-#         cd /build/glib/\$targetArch
+EOF
 
-#         # Create cross file
-#         cat << END > android-cross-file.txt
+# Create a script that will set up the environment for a particular architecture build
+COPY <<-EOF /setup.sh
 
-#             [binaries]
-#             c = '\$targetArch-linux-android34-clang'
-#             cpp = '\$targetArch-linux-android34-clang++'
-#             ar = 'llvm-ar'
-#             ld = '\$targetArch-linux-android34-clan'
+    # Ensure Android NDK binaries are on the path
+    echo "Preparing to build for \$1..."
+    export TOOLCHAIN=\$NDK_ROOT/toolchains/llvm/prebuilt/linux-x86_64
+    export PATH=\$PATH:\$TOOLCHAIN/bin
 
-#             [host_machine]
-#             system = 'linux'
-#             cpu_family = 'x86_64'
-#             cpu = 'x86_64'
-#             endian = 'little'
+    # Prepare build environment to use Android NDK's build tools (clang instead of gcc)
+    export SYSROOT="/build/sysroot/\$1"
+    export ANDROID_LIBS="\$SYSROOT/usr/lib/\$1-linux-android/34/"
+    export PKG_CONFIG_SYSROOT_DIR="\$SYSROOT"
+    export PKG_CONFIG_PATH="\$SYSROOT/lib/pkgconfig"
+    export PKG_CONFIG_LIBDIR="\$SYSROOT/lib/pkgconfig"
+    export CC="\$TOOLCHAIN/bin/\$1-linux-android34-clang"
+    export CXX="\$TOOLCHAIN/bin/\$1-linux-android34-clang++"
+    export LD="\$TOOLCHAIN/bin/ld"
+    export LLD="\$TOOLCHAIN/bin/lld"
+    export AR="\$TOOLCHAIN/bin/llvm-ar"
+    export STRIP="\$TOOLCHAIN/bin/llvm-strip"
+    export RANLIB="\$TOOLCHAIN/bin/llvm-ranlib"
+    export NM="\$TOOLCHAIN/bin/llvm-nm"
+    export CFLAGS="--target=\$1-none-linux-android34 --sysroot=\$SYSROOT -fPIE -fPIC -DTEST_FREXPL_DECL=1 -DANDROID=1"
+    export LDFLAGS="--target=\$1-none-linux-android34 --sysroot=\$SYSROOT -pie -fPIE -L\$ANDROID_LIBS"
 
-#             [properties]
-#             sys_root = '\$NDK_ROOT/toolchains/llvm/prebuilt/linux-x86_64/sysroot/usr'
+    # Setup cross-compilation file for meson based builds
+    cat <<EOF2 > "/build/cross-file-\$1.txt"
 
-# END
+        [binaries]
+        c = '\$CC'
+        cpp = '\$CXX'
+        ar = '\$AR'
+        ld = '\$LD'
+        strip = '\$STRIP'
+        pkg-config = '\$1-linux-android34-pkg-config'
+        
+        [host_machine]
+        system = 'android'
+        cpu_family = '\$targetArch'
+        cpu = '\$targetArch'
+        endian = 'little'
 
-#         # Build glib
-#         echo "Building GLib..."
-#         meson setup --cross-file android-cross-file.txt || exit 1
-#         ninja || exit 1
-#         ninja install || exit 1
+        [properties]
+        sys_root = '\$SYSROOT'
 
-        # Make a copy of Qemu source for this arch
-        # echo "Copying Qemu source for \$targetArch..."
-        # mkdir -p "/build/qemu/\$targetArch"
-        # cp -r /src/qemu/. "/build/qemu/\$targetArch"
-        # cd "/build/qemu/\$targetArch"
+EOF2
+
+    # Android NDK does not provide a cross-compile prefixed pkg-config, so we need to provide one that just links to the system one
+    ln -s /usr/bin/pkg-config "\$TOOLCHAIN/bin/\$1-linux-android34-pkg-config"
+
+    # Test that our build environment works
+    mkdir -p /build/test/\$1
+    echo -e "int main() { return 0; }" > /build/test/\$1/test.c
+    \$CC \$CFLAGS \$LDFLAGS /build/test/\$1/test.c -o /build/test/\$1/test || exit 1
+
+EOF
+
+# Build libiconv for each target
+RUN /bin/bash <<EOF # Build libiconv
+
+    # Loop through arch's
+    for targetArch in \${TargetArchs//,/ } ; do
+
+        # Setup build environment
+        source /setup.sh "\$targetArch"
+
+        # Make a copy of the source folder for this arch
+        mkdir -p /build/libiconv/\$targetArch
+        cp -r /src/libiconv-1.17/. "/build/libiconv/\$targetArch"
+        cd "/build/libiconv/\$targetArch"
+
+        # Build libiconv
+        echo "Building libiconv..."
+        ./configure --host="\$targetArch-linux-android34" --prefix="\$SYSROOT" --exec-prefix="\$SYSROOT" --enable-static || exit 1
+        make -j\$(nproc) || exit 1
+        make install || exit 1
+        
+    done
+
+EOF
+
+# Build glib for each target
+RUN /bin/bash <<EOF # Build glibc
+
+    # Loop through arch's
+    for targetArch in \${TargetArchs//,/ } ; do
+
+        # Setup build environment
+        source /setup.sh "\$targetArch"
+
+        # Make a copy of the source folder for this arch
+        mkdir -p /build/glib/\$targetArch
+        cp -r /src/glib/. "/build/glib/\$targetArch"
+        cd "/build/glib/\$targetArch"
+
+        # Build glib
+        # See: https://docs.gtk.org/glib/building.html
+        echo "Building GLib..."
+        meson setup "_build" --prefix="\$SYSROOT" --cross-file "/build/cross-file-\$targetArch.txt"  || exit 1
+        meson compile -C "_build" -j\$(nproc) || exit 1
+        meson install -C "_build" || exit 1
+
+        # Test that it was actually installed
+        echo -e "\\nTesting for installation..."
+        find "\$SYSROOT" -name "glib-2.0.pc"
+        \$targetArch-linux-android34-pkg-config --exists --print-errors glib-2.0 || exit 1
+
+    done
+
+EOF
+
+# Build Qemu for each target
+RUN /bin/bash <<EOF # Build Qemu
+
+    # Loop through arch's
+    for targetArch in \${TargetArchs//,/ } ; do
+
+        # Setup build environment
+        source /setup.sh "\$targetArch"
+
+        # Test static pie
+        # echo -e "int main() { return 0; }" > /build/test/\$targetArch/test.c
+        # \$CC \$CFLAGS \$LDFLAGS /build/test/\$targetArch/test.c -o /build/test/\$targetArch/test -static-pie || exit 1
+        # exit 2
+
+        # Test pkg-config
+        # \$targetArch-linux-android34-pkg-config --exists --print-errors glib-2.0
+        # echo \$?
+        # exit 2
+
+        # Copy libnuma header to sysroot
+        cd "\$SYSROOT/usr/include"
+        wget https://raw.githubusercontent.com/numactl/numactl/refs/heads/master/libnuma.c
+
+        # Make a copy of the source folder for this arch
+        mkdir -p /build/qemu/\$targetArch
+        cp -r /src/qemu/. "/build/qemu/\$targetArch"
+        cd "/build/qemu/\$targetArch"
 
         # Build Qemu
+        # I would have liked --enable-pie but apparently Qemu is incorrectly detecting that it's not supported...
         echo "Configuring Qemu build..."
-        cd /src/qemu
-        ./configure \
-            --cross-prefix=\$targetArch-linux-gnu- \
-            --prefix=/build/qemu/\$targetArch \
-            $BuildFlags \
+        ./configure                                                                 \
+            --cross-prefix="\$targetArch-linux-android34-"                          \
+            --prefix="\$SYSROOT"                                                    \
+            --static                                                                \
+            --target-list=$TargetList                                               \
+            --without-default-features                                              \
+            --disable-werror                                                        \
+            --enable-system                                                         \
+            --enable-strip                                                          \
+            --enable-numa                                                           \
             || exit 1
 
         # Build
         echo "Building Qemu..."
-        make -j10 || exit 1
+        make -j\$(nproc) || exit 1
         make install || exit 1
 
     done
@@ -146,7 +221,7 @@ EOF
 
 # Zip Qemu's assets, just use the ones from the ARM64 build since they are the same for all builds
 WORKDIR /
-RUN zip -r --verbose --junk-paths qemu-assets.zip /build/qemu/aarch64/usr/local/share/qemu
+RUN zip -r --verbose --junk-paths qemu-assets.zip "/build/sysroot/aarch64/usr/local/share/qemu"
 
 # Add final script to copy the binaries of the architectures we support to the jniLibs folder. Since the Android project has extractNativeLibs set,
 # everything in the jniLibs folder will be extracted to the device's file system and marked as executable. An interesting workaround for the fact that
@@ -171,7 +246,7 @@ COPY <<-EOF /finish.sh
 
         # Copy each emulated arch's binary
         for emulatedArch in qemu-system-* ; do
-            cp --verbose "/build/qemu/\$targetArch/usr/local/bin/\$emulatedArch" "/project/app/src/main/jniLibs/\$targetArch/lib\$emulatedArch.so"
+            cp --verbose "/build/sysroot/\$targetArch/usr/local/bin/\$emulatedArch" "/project/app/src/main/jniLibs/\$targetArch/lib\$emulatedArch.so"
         done
 
     done
