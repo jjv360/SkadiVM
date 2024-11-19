@@ -32,8 +32,11 @@
             </intent-filter>
         </activity>
 
-        <!-- Add VM activity -->
+        <!-- Select VM template activity -->
         <activity android:name=".activities.SelectVMTemplateActivity" />
+
+        <!-- Create VM from template activity -->
+        <activity android:name=".activities.CreateVMActivity" />
 
     </application>
 

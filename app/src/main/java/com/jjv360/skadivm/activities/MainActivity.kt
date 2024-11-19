@@ -126,17 +126,17 @@ fun AppMainComponent() {
                     // No items text
                     Text(
                         text = "No virtual machines",
-                        fontSize = 4.em,
+                        fontSize = 5.em,
                         color = Color(red = 1f, green = 1f, blue = 1f, alpha = 1f),
                         textAlign = TextAlign.Center,
-                        modifier = Modifier.sizeIn(maxWidth = 320.dp),
+                        modifier = Modifier.sizeIn(maxWidth = 320.dp).padding(start = 20.dp, end = 20.dp),
                     )
                     Text(
                         text = "Press the + button below to create a new virtual machine.",
-                        fontSize = 2.em,
+                        fontSize = 3.em,
                         color = Color(red = 1f, green = 1f, blue = 1f, alpha = 0.75f),
                         textAlign = TextAlign.Center,
-                        modifier = Modifier.sizeIn(maxWidth = 320.dp).padding(top = 10.dp, bottom = 100.dp),
+                        modifier = Modifier.sizeIn(maxWidth = 320.dp).padding(start = 20.dp, end = 20.dp, top = 10.dp, bottom = 100.dp),
                     )
 
                 }

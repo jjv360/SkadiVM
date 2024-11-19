@@ -21,6 +21,7 @@
 win98:
 
     # Template info when displayed to the user
+    id: com.jjv360.vm.win98
     name: Windows 98
     description: Emulated i386 CPU with 256MB of memory and a 4GB hard drive.
     icon: file:///android_asset/icons/windows-98.png
