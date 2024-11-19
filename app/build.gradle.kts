@@ -2,6 +2,7 @@ plugins {
     alias(libs.plugins.android.application)
     alias(libs.plugins.kotlin.android)
     alias(libs.plugins.kotlin.compose)
+    alias(libs.plugins.kotlin.serialization)
 }
 
 android {
@@ -38,7 +39,8 @@ android {
         compose = true
     }
 
-    // Allow libs to be extracted on install, we need this to run Qemu
+    // Allow libs to be extracted on install, we need this to run Qemu. Pairs with the
+    // extractNativeLibs value in the manifest.
     packaging {
         jniLibs {
             useLegacyPackaging = true
@@ -70,5 +72,15 @@ dependencies {
 
     // VNC client
     implementation("com.shinyhut:vernacular:1.14")
+
+    // Lottie animations
+    implementation("com.airbnb.android:lottie-compose:6.6.0")
+
+    // YAML parser
+    implementation("com.charleskorn.kaml:kaml:0.65.0")
+
+    // AsyncImage support
+    implementation("io.coil-kt.coil3:coil-compose:3.0.3")
+    implementation("io.coil-kt.coil3:coil-network-okhttp:3.0.3")
 
 }

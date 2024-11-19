@@ -1,12 +1,49 @@
 #
 # Defines VM templates for easy set up
+#
+# The task commands are not shell commands. Only some commands are available:
+# - echo : Shows the specified text in the UI while the app is loading the VM
+# - qemu-img : Runs the qemu-img binary
+# - qemu-system-<arch> : Runs the specified qemu system binary
+# - cp <from> <to> : Copy the specified file or folder
+# - mv <from> <to> : Move the specified file or folder
+# - rm <item> : Delete the specified file or folder
+# - mkdir <item> : Ensure the folder exists
+#
+# Available parameters provided by the app:
+# - ${system.arch} - Qemu architecture which matches the architecture of the host device
+# - ${X} - Any custom props in the yaml can also be accessed this way
+# - ${qemu.path} - Path to the Qemu assets, such as ROMs etc
+# - ${vm.path} - Path to the user's VM folder
 
+# Windows 98 template
+# See: https://computernewb.com/wiki/QEMU/Guests/Windows_98
 win98:
+
+    # Template info when displayed to the user
     name: Windows 98
-    arch: x86_64
-    disk:
-        - size: 1G
+    description: Emulated i386 CPU with 256MB of memory and a 4GB hard drive.
+    icon: file:///android_asset/icons/windows-98.png
+
+    # Requirements in order to use this VM
+    requires:
+        - qemu-img
+        - qemu-system-i386
+
+    # Custom properties can be accessed with ${keyExample} etc
+    props:
+        keyExample: valueExample
+
+    # Files to download to the user's VM folder when installing
     files:
-        - installer: https://archive.org/download/windows-98-se-retail/Windows%2098%20SE%20%28Retail%29.iso
-    qemu:
-        - 
+        win98se.iso: "https://archive.org/download/windows-98-se-retail/Windows%2098%20SE%20%28Retail%29.iso"
+
+    # Tasks to run when installing
+    installTasks:
+        - "echo Creating C: drive..."
+        - "qemu-img -f qcow2 \"${vm.path}/drive0.qcow2\" 4G"
+
+    # Tasks to run when starting the VM
+    runTasks:
+        - "echo Starting Windows 98..."
+        - "qemu-system-i386 -hda \"${vm.path}/drive0.qcow2\" -cdrom \"${vm.path}/win98se.iso\" -m 256"

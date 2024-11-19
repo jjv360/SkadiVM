@@ -2,8 +2,6 @@
 
 A tool for running virtual machines on Android. Can run on x86_64 and ARM64 devices, and supports any number of emulated architectures.
 
-> Is this project even possible? Qemu needs to be run as a binary, and Android doesn't allow that. There are workarounds that work in the emulator but not on device.
-
 ## Development
 
 Just run it in Android Studio normally.
