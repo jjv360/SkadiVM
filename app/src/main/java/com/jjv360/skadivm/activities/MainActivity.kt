@@ -5,13 +5,25 @@ import android.os.Bundle
 import androidx.activity.ComponentActivity
 import androidx.activity.compose.setContent
 import androidx.activity.enableEdgeToEdge
+import androidx.compose.foundation.background
+import androidx.compose.foundation.border
+import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
+import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.ExperimentalLayoutApi
+import androidx.compose.foundation.layout.FlowColumn
+import androidx.compose.foundation.layout.FlowRow
+import androidx.compose.foundation.layout.aspectRatio
 import androidx.compose.foundation.layout.fillMaxSize
+import androidx.compose.foundation.layout.fillMaxWidth
+import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.sizeIn
+import androidx.compose.foundation.layout.width
+import androidx.compose.foundation.layout.wrapContentHeight
+import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Add
 import androidx.compose.material3.ExperimentalMaterial3Api
@@ -28,19 +40,25 @@ import androidx.compose.runtime.getValue
 import androidx.compose.runtime.remember
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.draw.alpha
+import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.tooling.preview.Devices
 import androidx.compose.ui.tooling.preview.Preview
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.em
+import coil3.compose.AsyncImage
 import com.airbnb.lottie.RenderMode
 import com.airbnb.lottie.compose.LottieAnimation
 import com.airbnb.lottie.compose.LottieCompositionSpec
 import com.airbnb.lottie.compose.rememberLottieComposition
 import com.jjv360.skadivm.ui.theme.SkadiVMTheme
+import com.jjv360.skadivm.utils.VM
 import com.jjv360.skadivm.utils.VMManager
+import java.io.File
 
 class MainActivity : ComponentActivity() {
 
@@ -70,15 +88,27 @@ class MainActivity : ComponentActivity() {
 @Preview(device = Devices.PIXEL_TABLET, showSystemUi = true)
 fun AppMainComponent() {
 
-    // Get VM manager
+    // Get activity
     val ctx = LocalContext.current
-    val vmManager = remember { VMManager(ctx) }
+
+    // Get VMs
+    val vms = remember { VMManager.shared.getVirtualMachines(ctx) }
 
     // Called when the user clicks the add button
     val onAdd = {
 
         // Show the add dialog
         ctx.startActivity(Intent(ctx, SelectVMTemplateActivity::class.java))
+
+    }
+
+    // Called when the user selects a VM
+    val onSelectVM = { vm: VM ->
+
+        // Start the VM runner activity
+        val intent = Intent(ctx, RunVMActivity::class.java)
+        intent.putExtra("vm-id", vm.id)
+        ctx.startActivity(intent)
 
     }
 
@@ -109,7 +139,7 @@ fun AppMainComponent() {
         ) { padding ->
 
             // Check if no VMs available
-            if (vmManager.virtualMachines.size == 0) {
+            if (vms.isEmpty()) {
 
                 // Render no content UI
                 Column(modifier = Modifier.padding(padding).fillMaxSize(), horizontalAlignment = Alignment.CenterHorizontally, verticalArrangement = Arrangement.Center) {
@@ -146,7 +176,58 @@ fun AppMainComponent() {
 
             }
 
+            // Container for VM icons
+            FlowRow(
+                modifier = Modifier.padding(padding).padding(10.dp).fillMaxSize(),
+                horizontalArrangement = Arrangement.spacedBy(10.dp)
+            ) {
 
+                // Render each VM
+                vms.forEach {
+
+                    // Icon container
+                    Column(
+                        modifier = Modifier
+                            .wrapContentHeight()
+                            .width(300.dp)
+                            .clickable { onSelectVM(it) }
+                    ) {
+
+                        // Icon
+                        Box(
+                            modifier = Modifier
+                                .aspectRatio(16f/9f)
+                                .fillMaxWidth()
+                                .clip(RoundedCornerShape(8.dp))
+                                .background(Color.Black)
+                                .alpha(if (it.isRunning) 1f else 0.5f),
+                        ) {
+
+                            // Last loaded icon
+                            AsyncImage(
+                                model = File(it.path, "snapshot.jpg"),
+                                contentDescription = "",
+                                modifier = Modifier
+                                    .fillMaxSize()
+                                    .alpha(if (it.isRunning) 1f else 0.5f),
+                            )
+
+                        }
+
+                        // Title
+                        Text(
+                            text = it.name,
+                            fontSize = 3.em,
+                            modifier = Modifier.padding(top = 10.dp, bottom = 10.dp).fillMaxWidth(),
+                            color = MaterialTheme.colorScheme.primary,
+                            textAlign = TextAlign.Center,
+                        )
+
+                    }
+
+                }
+
+            }
 
         }
 

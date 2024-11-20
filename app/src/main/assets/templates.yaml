@@ -42,9 +42,9 @@ win98:
     # Tasks to run when installing
     installTasks:
         - "echo Creating C: drive..."
-        - "qemu-img -f qcow2 \"${vm.path}/drive0.qcow2\" 4G"
+        - "qemu-img -f qcow2 \"${vm.path}/drive_c.qcow2\" 4G"
 
     # Tasks to run when starting the VM
     runTasks:
         - "echo Starting Windows 98..."
-        - "qemu-system-i386 -hda \"${vm.path}/drive0.qcow2\" -cdrom \"${vm.path}/win98se.iso\" -m 256"
+        - "qemu-system-i386 -hda \"${vm.path}/drive_c.qcow2\" -cdrom \"${vm.path}/win98se.iso\" -m 256"

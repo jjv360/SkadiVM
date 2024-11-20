@@ -17,6 +17,7 @@
         android:supportsRtl="true"
         android:theme="@style/Theme.SkadiVM"
         android:extractNativeLibs="true"
+        android:installLocation="preferExternal"
         >
 
         <!-- Main app activity -->
@@ -37,6 +38,9 @@
 
         <!-- Create VM from template activity -->
         <activity android:name=".activities.CreateVMActivity" />
+
+        <!-- Run VM activity -->
+        <activity android:name=".activities.RunVMActivity" />
 
     </application>
 

@@ -1,57 +1,113 @@
 package com.jjv360.skadivm.utils
 
 import android.content.Context
+import com.charleskorn.kaml.Yaml
 import java.io.File
+import java.nio.charset.Charset
+import java.util.UUID
+
+/** Extend the Context to have a virtualMachinesDir param */
+val Context.virtualMachinesDir : File
+    get() = File(this.filesDir, "virtual-machines")
 
 /** Manages the database of VMs installed by the user */
-class VMManager(private val ctx : Context) {
+class VMManager private constructor() {
 
-    /** Cached list of VMs */
-    private val _cachedVMs = arrayListOf<VM>()
-    private var _fetchedCachedVMs = false
+    /** Statics */
+    companion object {
+
+        /** Get shared instance */
+        val shared = VMManager()
+
+    }
+
+    /** Cached VMs */
+    private val cachedVMs = arrayListOf<VM>()
 
     /** Get list of VMs that are installed */
-    val virtualMachines : ArrayList<VM>
-        get() {
+    fun getVirtualMachines(ctx: Context) : Array<VM> {
 
-            // If we've already fetched the list, stop here
-            if (_fetchedCachedVMs)
-                return _cachedVMs
+        // Check if cached VMs exist
+        if (cachedVMs.isNotEmpty())
+            return cachedVMs.toTypedArray()
 
-            // Get all setting keys
-            val prefs = ctx.getSharedPreferences("skadivm", Context.MODE_PRIVATE)
-            val keys = prefs.all.filter { it.key.startsWith("vm:") }
+        // Go through all files in the virtual machines folder
+        val vms = arrayListOf<VM>()
+        for (folder in ctx.virtualMachinesDir.listFiles() ?: arrayOf()) {
 
-            // Create VM for each entry
-            for (it in keys) {
+            // Get item
+            val vm = vmFromDirectory(ctx, folder)
 
-                // Get values
-                val id = it.key
-                val path = File(it.value as String)
-
-                // Check if file exists
-                if (!path.exists()) {
-                    println("[VMManager] VM not found: $path")
-                    continue
-                }
-
-                // Check if config file exists
-                val configFile = File(path, "vm.json")
-                if (!configFile.exists() || !configFile.canRead()) {
-                    println("[VMManager] Unable to access config object: $path/vm.json")
-                    continue
-                }
-
-                // Exists! Create and add it
-                val vm = VM(ctx, id, path)
-                _cachedVMs.add(vm)
-
-            }
-
-            // Done
-            _fetchedCachedVMs = true
-            return _cachedVMs
+            // Add it
+            if (vm != null)
+                cachedVMs.add(vm)
 
         }
+
+        // Done
+        return cachedVMs.toTypedArray()
+
+    }
+
+    /** Loads a VM from a folder and adds it to the cached VMs list */
+    private fun vmFromDirectory(ctx: Context, folder: File): VM? {
+
+        // Catch errors
+        try {
+
+            // Stop if the yaml subfile doesn't exist, this is not a VM
+            val templateFile = File(folder, "template.yaml")
+            if (!templateFile.exists())
+                return null
+
+            // Get VM ID, which is the name of the folder
+            val id = folder.name
+
+            // Load template
+            val templates = VMTemplate.fromYaml(templateFile)
+            if (templates.isEmpty())
+                throw Exception("The template.yaml file had no template information.")
+
+            // Exists! Create and return it
+            val vm = VM(manager = this, id = id, path = folder, template = templates.first(), ctx = ctx.applicationContext)
+            return vm
+
+        } catch (err: Throwable) {
+
+            // Load failed
+            println("[VMManager] Failed to load VM at $folder")
+            err.printStackTrace()
+            return null
+
+        }
+
+    }
+
+    /** Create a new VM based on a template */
+    fun createVM(ctx: Context, template: VMTemplate): VM {
+
+        // Create ID
+        val id = UUID.randomUUID().toString()
+
+        // Ensure folder exists
+        val folder = File(ctx.virtualMachinesDir, id)
+        folder.mkdirs()
+
+        // Save template to the directory
+        val yaml = VMTemplate.toYaml(mapOf("template" to template))
+        File(folder, "template.yaml").bufferedWriter(Charset.forName("UTF-8")).use {
+            it.write(yaml)
+        }
+
+        // Create VM
+        val vm = VM(manager = this, path = folder, id = id, template = template, ctx = ctx.applicationContext)
+        vm.load()
+
+        // TODO: Send out broadcast intent that a VM was created
+
+        // Done
+        return vm
+
+    }
 
 }

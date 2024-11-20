@@ -144,7 +144,7 @@ fun SelectVMTemplateComponent() {
         ) { padding ->
 
             // List of items
-            FlowColumn(
+            Column(
                 modifier = Modifier.padding(padding).fillMaxSize(),
             ) {
 

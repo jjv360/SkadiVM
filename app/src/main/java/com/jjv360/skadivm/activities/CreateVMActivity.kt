@@ -1,10 +1,14 @@
 package com.jjv360.skadivm.activities
 
+import android.R
+import android.content.Intent
+import android.net.Uri
 import android.os.Bundle
 import android.view.ViewGroup
 import androidx.activity.ComponentActivity
 import androidx.activity.compose.setContent
 import androidx.activity.enableEdgeToEdge
+import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
@@ -29,9 +33,13 @@ import androidx.compose.material3.TopAppBar
 import androidx.compose.material3.TopAppBarDefaults
 import androidx.compose.material3.TopAppBarDefaults.enterAlwaysScrollBehavior
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
+import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.draw.alpha
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.style.TextAlign
@@ -40,10 +48,15 @@ import androidx.compose.ui.tooling.preview.Preview
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.em
 import coil3.compose.AsyncImage
+import com.airbnb.lottie.compose.LottieAnimation
+import com.airbnb.lottie.compose.LottieCompositionSpec
+import com.airbnb.lottie.compose.rememberLottieComposition
 import com.jjv360.skadivm.ui.theme.SkadiVMTheme
+import com.jjv360.skadivm.utils.VMManager
 import com.jjv360.skadivm.utils.VMTemplate
 import java.net.URL
 
+/** Popup activity to create a VM */
 class CreateVMActivity : ComponentActivity() {
 
     /** Called on activity create */
@@ -51,7 +64,7 @@ class CreateVMActivity : ComponentActivity() {
         super.onCreate(savedInstanceState)
 
         // Request to appear as an android popup
-        setTheme(android.R.style.Theme_Material_Dialog_NoActionBar)
+        setTheme(R.style.Theme_Material_Dialog_NoActionBar)
 
         // Ensure dialog size matches layout size
         window.setLayout(ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.MATCH_PARENT)
@@ -66,6 +79,7 @@ class CreateVMActivity : ComponentActivity() {
         }
 
     }
+
 }
 
 @OptIn(ExperimentalMaterial3Api::class, ExperimentalLayoutApi::class)
@@ -82,9 +96,20 @@ fun CreateVMComponent() {
     val templateID = remember { ctx.intent.getStringExtra("vm-id") }
     val template = templates.find { it.id == templateID }
 
-    // Called when the user selects the Install button
-    val onInstall = {
-        println("Installing!")
+    // Called when the user presses the [Create VM] button
+    val onCreateVM = {
+
+        // Create VM
+        val vm = VMManager.shared.createVM(ctx, template!!)
+
+        // Close this activity
+        ctx.finish()
+
+        // Start the VM runner activity
+        val intent = Intent(ctx, RunVMActivity::class.java)
+        intent.putExtra("vm-id", vm.id)
+        ctx.startActivity(intent)
+
     }
 
     // Render UI
@@ -112,31 +137,28 @@ fun CreateVMComponent() {
                         // Install button
                         Button(
                             modifier = Modifier.padding(start = 10.dp),
+                            enabled = template != null,
+                            onClick = onCreateVM,
                             colors = ButtonColors(
                                 containerColor = MaterialTheme.colorScheme.primaryContainer,
                                 contentColor = MaterialTheme.colorScheme.primary,
                                 disabledContainerColor = MaterialTheme.colorScheme.tertiaryContainer,
                                 disabledContentColor = MaterialTheme.colorScheme.tertiary,
                             ),
-                            onClick = {
-                                onInstall()
-                            },
                         ) {
-                            Text("Install")
+                            Text("Create VM")
                         }
 
                         // Cancel button
                         Button(
                             modifier = Modifier.padding(start = 10.dp),
+                            onClick = { ctx.finish() },
                             colors = ButtonColors(
                                 containerColor = MaterialTheme.colorScheme.secondaryContainer,
                                 contentColor = MaterialTheme.colorScheme.secondary,
                                 disabledContainerColor = MaterialTheme.colorScheme.tertiaryContainer,
                                 disabledContentColor = MaterialTheme.colorScheme.tertiary,
                             ),
-                            onClick = {
-                                ctx.finish()
-                            },
                         ) {
                             Text("Cancel")
                         }
@@ -149,22 +171,25 @@ fun CreateVMComponent() {
         ) { padding ->
 
             // List of items
-            FlowColumn(
+            Column(
                 modifier = Modifier.padding(padding).fillMaxSize(),
-                horizontalArrangement = Arrangement.Center,
+                horizontalAlignment = Alignment.CenterHorizontally,
             ) {
 
                 // Stop if template not loaded
                 if (template == null) {
                     Text("Unable to load template.")
-                    return@FlowColumn
+                    return@Column
                 }
 
                 // Template icon
                 AsyncImage(
                     model = template.icon ?: "file:///android_asset/icons/server.png",
                     contentDescription = null,
-                    modifier = Modifier.size(128.dp, 128.dp).padding(top = 30.dp).align(Alignment.CenterHorizontally),
+                    modifier = Modifier
+                        .size(128.dp, 128.dp)
+                        .padding(top = 30.dp)
+                        .align(Alignment.CenterHorizontally),
                 )
 
                 // Title and description
