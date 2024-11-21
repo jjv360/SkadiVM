@@ -1,7 +1,7 @@
 #
 # Defines VM templates for easy set up
 #
-# The task commands are not shell commands. Only some commands are available:
+# The task commands are not shell commands, but commands for the app to run.
 # - echo : Shows the specified text in the UI while the app is loading the VM
 # - qemu-img : Runs the qemu-img binary
 # - qemu-system-<arch> : Runs the specified qemu system binary
@@ -41,7 +41,7 @@ win98:
         - "echo Downloading ISO..."
         - "download win98se.iso https://archive.org/download/windows-98-se-retail/Windows%2098%20SE%20%28Retail%29.iso"
         - "echo Creating C: drive..."
-        - "qemu-img create -f qcow2 \"${vm.path}/drive_c.qcow2\" 4G"
+        - "qemu-img create -f qcow2 drive_c.qcow2 4G"
 
     # Tasks to run when starting the VM
     runTasks:

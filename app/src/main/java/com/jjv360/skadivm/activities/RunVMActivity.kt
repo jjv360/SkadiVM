@@ -126,7 +126,7 @@ fun RunVMComponent(vm: VM) {
         ) { padding ->
 
             // Check if overlay should be visible. It's visible if the VM's overlayStatus has no text in it.
-            if (vm.overlayStatus.isNotBlank()) {
+            if (overlayStatus.isNotBlank()) {
 
                 // Overlay view
                 Column(
@@ -148,10 +148,19 @@ fun RunVMComponent(vm: VM) {
 
                     // Text label
                     Text(
-                        text = vm.overlayStatus,
+                        text = overlayStatus,
                         textAlign = TextAlign.Center,
                         color = Color.White,
                         fontSize = 4.em,
+                        modifier = Modifier.padding(bottom = 2.dp)
+                    )
+
+                    // Subtitle label
+                    Text(
+                        text = overlaySubStatus,
+                        textAlign = TextAlign.Center,
+                        color = Color.White.copy(alpha = 0.5f),
+                        fontSize = 3.em,
                     )
 
                 }

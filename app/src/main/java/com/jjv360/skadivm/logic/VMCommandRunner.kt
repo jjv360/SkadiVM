@@ -6,6 +6,8 @@ import android.os.Looper
 import com.jjv360.skadivm.services.MonitorService
 import com.jjv360.skadivm.utils.ArgumentTokenizer
 import java.io.File
+import java.io.FileOutputStream
+import java.net.URL
 
 /** Runs a set of commands in context of a VM. This should be called from a background thread. */
 class VMCommandRunner(val vm : VM) {
@@ -15,9 +17,10 @@ class VMCommandRunner(val vm : VM) {
 
         /** Operations */
         val commands = mapOf<String, (runner: VMCommandRunner, args: List<String>) -> Unit>(
-            "echo" to { runner, args -> opEcho(runner, args) },
-            "qemu-img" to { runner, args -> opQemuImg(runner, args) },
-            "internal:markInstalled" to { runner, args -> opInternalMarkInstalled(runner, args) },
+            "echo"                      to { runner, args -> opEcho(runner, args) },
+            "qemu-img"                  to { runner, args -> opQemuImg(runner, args) },
+            "internal:markInstalled"    to { runner, args -> opInternalMarkInstalled(runner, args) },
+            "download"                  to { runner, args -> opDownload(runner, args) },
         )
 
     }
@@ -163,8 +166,9 @@ fun opQemuImg(runner: VMCommandRunner, args: List<String>) {
     qemu.extractQemuAssets()
 
     // Run command
+    val workDir = runner.vm.path
     val exe = File(runner.vm.ctx.applicationInfo.nativeLibraryDir, "libqemu-img.so")
-    val exitCode = runner.executeProcessWithLines(qemu.qemuResourcePath, exe, args) {
+    val exitCode = runner.executeProcessWithLines(workDir, exe, args) {
 
         // If line has content, show it
         println("qemu-img: $it")
@@ -186,4 +190,69 @@ fun opQemuImg(runner: VMCommandRunner, args: List<String>) {
 /** Marks the VM as having finished installation */
 fun opInternalMarkInstalled(runner: VMCommandRunner, args: List<String>) {
     runner.vm.isInstalled = true
+}
+
+/** Download a file */
+fun opDownload(runner: VMCommandRunner, args: List<String>) {
+
+    // Start download
+    runner.vm.overlaySubStatus = "Downloading..."
+    val file = File(runner.vm.path, args[0])
+    val url = URL(args[1])
+
+    // Ensure directory exists
+    file.parentFile!!.mkdirs()
+
+    // Open URL connection
+    val urlConnection = url.openConnection()
+
+    // Get file size
+    val totalSize = urlConnection.contentLengthLong
+
+    // Open stream
+    urlConnection.getInputStream().use { inputStream ->
+
+        // Open connection to file
+        FileOutputStream(file).use { outputStream ->
+
+            // Pipe it across
+            val buffer = ByteArray(1024*1024)
+            var amountLoaded = 0L
+            while (true) {
+
+                // Load next chunk
+                val amount = inputStream.read(buffer)
+                if (amount == -1)
+                    break
+
+                // Write it out
+                outputStream.write(buffer, 0, amount)
+
+                // Update UI
+                amountLoaded += amount
+                if (totalSize == -1L)
+                    runner.vm.overlaySubStatus = "Downloading ${bytesToHumanReadableSize(amountLoaded)}"
+                else
+                    runner.vm.overlaySubStatus = "Downloading ${bytesToHumanReadableSize(amountLoaded)} of ${bytesToHumanReadableSize(totalSize)}"
+
+                // Log
+//                println("[VM ${runner.vm.id}] ${runner.vm.overlaySubStatus}")
+
+            }
+
+        }
+    }
+
+    // Done
+    runner.vm.overlaySubStatus = ""
+    println("[VM ${runner.vm.id}] Download complete")
+
+}
+
+// Convert byte size to readable string
+fun bytesToHumanReadableSize(bytes: Long) = when {
+    bytes >= 1024*1024*1024 -> "%.2f GB".format(bytes.toDouble() / (1024*1024*1024))
+    bytes >= 1024*1024 -> "%.2f MB".format(bytes.toDouble() / (1024*1024))
+    bytes >= 1024 -> "%.2f KB".format(bytes.toDouble() / (1024))
+    else -> "$bytes B"
 }

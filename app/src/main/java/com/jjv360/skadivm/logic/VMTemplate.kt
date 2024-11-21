@@ -33,9 +33,6 @@ data class VMTemplate(
     /** Custom properties specified in the yaml config */
     var props: Map<String, String>?,
 
-    /** List of files to download before creating the template. Key is file name, value is a URL. */
-    var files: Map<String, String>?,
-
     /** Tasks to run when installing the VM */
     var installTasks: List<String>?,
 
