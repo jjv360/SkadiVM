@@ -8,7 +8,7 @@ import java.io.File
 class Qemu(private val ctx: Context) {
 
     /** Get Qemu resource path */
-    private val qemuResourcePath
+    val qemuResourcePath
         get() = File(ctx.cacheDir, "qemu-assets-v9.1-3")
 
     /** Get list of supported architectures for emulation */
@@ -29,7 +29,7 @@ class Qemu(private val ctx: Context) {
     }
 
     /** Get Qemu binary path for a specific architecture we want to emulate */
-    private fun getQemuBinaryPath(arch: String): File {
+    fun getQemuBinaryPath(arch: String): File {
         return File(ctx.applicationInfo.nativeLibraryDir, "libqemu-system-$arch.so")
     }
 
@@ -37,7 +37,7 @@ class Qemu(private val ctx: Context) {
     private var thread : Thread? = null
 
     /** Extract Qemu */
-    private fun extractQemuAssets() {
+    fun extractQemuAssets() {
 
         // Check if Qemu has been extracted already
         if (qemuResourcePath.exists())

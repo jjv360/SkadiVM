@@ -160,7 +160,10 @@ class VM(
             for (op in ops)
                 runner.runCommand(op)
 
-            Thread.sleep(30000)
+            // Show toast
+            mainThreadHandler.post {
+                Toast.makeText(ctx, "$name has closed.", Toast.LENGTH_LONG).show()
+            }
 
         } catch (err: Throwable) {
 
@@ -168,6 +171,11 @@ class VM(
             err.printStackTrace()
             error = err
             overlayStatus = err.message ?: "An unknown error occurred."
+
+            // Show toast
+            mainThreadHandler.post {
+                Toast.makeText(ctx, "$name error: ${err.message}", Toast.LENGTH_LONG).show()
+            }
 
         }
 
@@ -179,11 +187,6 @@ class VM(
         thread = null
         overlayStatus = ""
         overlaySubStatus = ""
-
-        // Show toast
-        mainThreadHandler.post {
-            Toast.makeText(ctx, "$name has exited.", Toast.LENGTH_LONG).show()
-        }
 
     }
 

@@ -238,9 +238,10 @@ EOF
 # Patch Qemu
 RUN /bin/bash <<EOF # Patch Qemu
 
-    # Patch shm_open/shm_unlink shims out of Qemu since Android doesn't support it, and they don't have a config option to disable it that I can find
+    # Patch shm_open/shm_unlink out of Qemu since Android doesn't support it, and they don't have a config option to disable it that I can find
     # TODO: Android has ashmem instead, maybe shim that in instead?
-    sed -i -e '/hostmem-shm/s/^/#/' /src/qemu/backends/meson.build
+    sed -i -e "/subdir('contrib\\/ivshmem-server')/s/^/#/" /src/qemu/meson.build
+    sed -i -e "/hostmem-shm/s/^/#/" /src/qemu/backends/meson.build
 
     # Comment out all tests
     sed -i -e "/subdir('tests')/s/^/#/" /src/qemu/meson.build
@@ -290,6 +291,8 @@ RUN /bin/bash <<EOF # Build Qemu
             --enable-pixman                                                         \
             --enable-vnc                                                            \
             --enable-vnc-jpeg                                                       \
+            --enable-tools                                                          \
+            --enable-qcow1                                                          \
             || exit 1
 
         # Build

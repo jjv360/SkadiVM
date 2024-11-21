@@ -9,6 +9,7 @@
 # - mv <from> <to> : Move the specified file or folder
 # - rm <item> : Delete the specified file or folder
 # - mkdir <item> : Ensure the folder exists
+# - download <filename> <url> : Downloads a file into the VM folder
 #
 # Available parameters provided by the app:
 # - ${system.arch} - Qemu architecture which matches the architecture of the host device
@@ -35,14 +36,12 @@ win98:
     props:
         keyExample: valueExample
 
-    # Files to download to the user's VM folder when installing
-    files:
-        win98se.iso: "https://archive.org/download/windows-98-se-retail/Windows%2098%20SE%20%28Retail%29.iso"
-
     # Tasks to run when installing
     installTasks:
+        - "echo Downloading ISO..."
+        - "download win98se.iso https://archive.org/download/windows-98-se-retail/Windows%2098%20SE%20%28Retail%29.iso"
         - "echo Creating C: drive..."
-        - "qemu-img -f qcow2 \"${vm.path}/drive_c.qcow2\" 4G"
+        - "qemu-img create -f qcow2 \"${vm.path}/drive_c.qcow2\" 4G"
 
     # Tasks to run when starting the VM
     runTasks:
