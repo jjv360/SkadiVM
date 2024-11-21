@@ -44,7 +44,7 @@ class VM(
 
     /** True if this VM has been installed */
     var isInstalled: Boolean
-        get() = props.getOrDefault("isInstalled", "") == ""
+        get() = props.getOrDefault("isInstalled", "") != ""
         set(v) {
             props["isInstalled"] = if (v) "yes" else ""
             save()
@@ -147,12 +147,20 @@ class VM(
         // Add run commands
         ops.addAll(template.runTasks)
 
+        // Create command runner
+        val runner = VMCommandRunner(this)
+
         // Catch errors
         try {
 
+            // Start
+            runner.start()
+
             // Run each op
             for (op in ops)
-                threadRunOp(op)
+                runner.runCommand(op)
+
+            Thread.sleep(30000)
 
         } catch (err: Throwable) {
 
@@ -163,8 +171,11 @@ class VM(
 
         }
 
-        // When thread is done, remove it
+        // Cleanup
         println("[VM $id] Stopped.")
+        runner.finish()
+
+        // When thread is done, remove it
         thread = null
         overlayStatus = ""
         overlaySubStatus = ""
@@ -173,33 +184,6 @@ class VM(
         mainThreadHandler.post {
             Toast.makeText(ctx, "$name has exited.", Toast.LENGTH_LONG).show()
         }
-
-    }
-
-    /** Run an operation */
-    private fun threadRunOp(op: String) {
-
-        // Split command into arguments, shell style
-        val cmdline = ArgumentTokenizer.tokenize(op)
-        val cmd = cmdline[0]
-        val args = cmdline.subList(1, cmdline.size)
-        println("[VM $id] Running: $op")
-
-        // Check which command to run
-        if (cmd == "echo")
-            threadOpEcho(args)
-        else
-            throw Exception("Unknown command: $cmd")
-
-    }
-
-    /** Echo operation, shows a UI overlay */
-    private fun threadOpEcho(args: List<String>) {
-
-        // Update UI
-        val text = args.joinToString(" ")
-        overlayStatus = text
-        overlaySubStatus = ""
 
     }
 

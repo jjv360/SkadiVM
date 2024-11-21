@@ -15,8 +15,11 @@ import androidx.compose.foundation.layout.padding
 import androidx.compose.material3.Scaffold
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
+import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
@@ -30,6 +33,7 @@ import com.airbnb.lottie.compose.rememberLottieComposition
 import com.jjv360.skadivm.ui.theme.SkadiVMTheme
 import com.jjv360.skadivm.logic.VM
 import com.jjv360.skadivm.logic.VMManager
+import kotlinx.coroutines.delay
 
 /** Popup activity to create a VM */
 class RunVMActivity : ComponentActivity() {
@@ -89,9 +93,30 @@ fun RunVMComponent(vm: VM) {
         "lottie/loader-wheel2.lottie",
     ).random() }
 
-    // If VM ends, close the activity
-    if (!vm.isRunning) {
-        ctx.finish()
+    // Monitor VM state
+    var overlayStatus by remember { mutableStateOf(vm.overlayStatus) }
+    var overlaySubStatus by remember { mutableStateOf(vm.overlaySubStatus) }
+    var vmError by remember { mutableStateOf(vm.error) }
+    LaunchedEffect(vm) {
+
+        // Check state constantly while the VM is active
+        while (true) {
+
+            overlayStatus = vm.overlayStatus
+            overlaySubStatus = vm.overlaySubStatus
+            vmError = vm.error
+
+            // Don't do this too quickly
+            // TODO: Better way of updating state from a non-Composable?
+            delay(500)
+
+            // If VM ends, close the activity
+            if (!vm.isRunning) {
+                ctx.finish()
+            }
+
+        }
+
     }
 
     // Render UI

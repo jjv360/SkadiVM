@@ -5,6 +5,8 @@
     <!-- Permissions -->
     <uses-permission android:name="android.permission.INTERNET" />
     <uses-permission android:name="android.permission.ACCESS_NETWORK_STATE" />
+    <uses-permission android:name="android.permission.FOREGROUND_SERVICE" />
+    <uses-permission android:name="android.permission.FOREGROUND_SERVICE_SPECIAL_USE" />
 
     <!-- Application-->
     <application
@@ -41,6 +43,9 @@
 
         <!-- Run VM activity -->
         <activity android:name=".activities.RunVMActivity" />
+
+        <!-- Monitor service -->
+        <service android:name=".services.MonitorService" android:foregroundServiceType="specialUse" />
 
     </application>
 
