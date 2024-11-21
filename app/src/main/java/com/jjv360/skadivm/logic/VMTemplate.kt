@@ -1,4 +1,4 @@
-package com.jjv360.skadivm.utils
+package com.jjv360.skadivm.logic
 
 import android.content.Context
 import com.charleskorn.kaml.Yaml

@@ -1,7 +1,11 @@
-package com.jjv360.skadivm.utils
+package com.jjv360.skadivm.logic
 
 import android.content.Context
+import android.os.Handler
+import android.os.Looper
+import android.widget.Toast
 import com.charleskorn.kaml.Yaml
+import com.jjv360.skadivm.utils.ArgumentTokenizer
 import kotlinx.serialization.decodeFromString
 import kotlinx.serialization.encodeToString
 import java.io.File
@@ -25,7 +29,7 @@ class VM(
     /** Template used to create this VM */
     val template: VMTemplate,
 
-) {
+    ) {
 
     /** List of properties */
     var props = mutableMapOf<String, String>()
@@ -91,11 +95,36 @@ class VM(
 
     }
 
+    /** Stop the VM */
+    fun stop() {
+
+        // Stop if already stopped
+        if (!isRunning)
+            return
+
+        // Interrupt thread
+        thread?.interrupt()
+        thread?.stop()
+        thread = null
+
+    }
+
+    /** Delete this VM */
+    fun delete() {
+        manager.deleteVM(this)
+    }
+
     /** Current error */
     var error: Throwable? = null
 
     /** Current overlay status. If non-blank, the overlay should show this over the UI. */
     var overlayStatus = ""
+
+    /** Overlay substatus, usually the output from a command */
+    var overlaySubStatus = ""
+
+    /** Access to the main thread */
+    val mainThreadHandler = Handler(Looper.getMainLooper())
 
     /** THREAD: Start the thread */
     private fun threadStart() {
@@ -137,6 +166,13 @@ class VM(
         // When thread is done, remove it
         println("[VM $id] Stopped.")
         thread = null
+        overlayStatus = ""
+        overlaySubStatus = ""
+
+        // Show toast
+        mainThreadHandler.post {
+            Toast.makeText(ctx, "$name has exited.", Toast.LENGTH_LONG).show()
+        }
 
     }
 
@@ -163,6 +199,7 @@ class VM(
         // Update UI
         val text = args.joinToString(" ")
         overlayStatus = text
+        overlaySubStatus = ""
 
     }
 

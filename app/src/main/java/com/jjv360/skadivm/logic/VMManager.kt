@@ -1,7 +1,6 @@
-package com.jjv360.skadivm.utils
+package com.jjv360.skadivm.logic
 
 import android.content.Context
-import com.charleskorn.kaml.Yaml
 import java.io.File
 import java.nio.charset.Charset
 import java.util.UUID
@@ -103,10 +102,27 @@ class VMManager private constructor() {
         val vm = VM(manager = this, path = folder, id = id, template = template, ctx = ctx.applicationContext)
         vm.load()
 
+        // Add to cache
+        cachedVMs.add(vm)
+
         // TODO: Send out broadcast intent that a VM was created
 
         // Done
         return vm
+
+    }
+
+    /** Delete VM */
+    fun deleteVM(vm: VM) {
+
+        // First make sure it's stopped
+        vm.stop()
+
+        // Delete all files in this path
+        vm.path.deleteRecursively()
+
+        // Remove from cached list
+        cachedVMs.remove(vm)
 
     }
 
