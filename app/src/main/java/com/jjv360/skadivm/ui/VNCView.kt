@@ -180,6 +180,6 @@ class VNCAndroidView(ctx: Context, val hostname: String, val port: Int) : View(c
 fun VNCView(hostname: String, port: Int) {
     AndroidView(
         factory = { ctx -> VNCAndroidView(ctx, hostname, port) },
-        modifier = Modifier.fillMaxSize()
+        modifier = Modifier.fillMaxSize().background(Color.Black)
     )
 }

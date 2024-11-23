@@ -188,16 +188,17 @@ class VNCClient(val hostname: String, val port: Int) {
             onFramebufferResize!!(framebufferWidth, framebufferHeight)
 
         // Send our required pixel format
-        output.writeByte(RFBConstants.ClientToServerMessageType.SetPixelFormat)
-        output.writeByte(0)
-        output.writeByte(0) // <-- padding
-        output.writeByte(0)
-        framebuffer!!.pixelFormat.writeTo(output)
+//        output.writeByte(RFBConstants.ClientToServerMessageType.SetPixelFormat)
+//        output.writeByte(0)
+//        output.writeByte(0) // <-- padding
+//        output.writeByte(0)
+//        framebuffer!!.pixelFormat.writeTo(output)
+//        output.flush()
 
         // Supported encodings, priority first
         val encodings = listOf(
-            RFBConstants.Encoding.ZRLE,
-            RFBConstants.Encoding.CopyRect,
+//            RFBConstants.Encoding.ZRLE,
+//            RFBConstants.Encoding.CopyRect,
             RFBConstants.Encoding.Raw,
         )
 
@@ -207,6 +208,7 @@ class VNCClient(val hostname: String, val port: Int) {
         output.writeShort(encodings.size)
         for (enc in encodings)
             output.writeInt(enc)
+        output.flush()
 
         // Request updates to the entire screen
         requestNextFrame(true)
@@ -242,7 +244,7 @@ class VNCClient(val hostname: String, val port: Int) {
     }
 
     /** Request a new frame update */
-    fun requestNextFrame(fullRefresh: Boolean = false) {
+    private fun requestNextFrame(fullRefresh: Boolean = false) {
 
         // Stop if no output stream
         if (outputStream == null || framebuffer == null)
@@ -250,6 +252,7 @@ class VNCClient(val hostname: String, val port: Int) {
 
         // Request updates to the entire screen
         synchronized(outputStream!!) {
+//            logger.info("Requesting next frame")
             outputStream!!.writeByte(RFBConstants.ClientToServerMessageType.FramebufferUpdateRequest)
             outputStream!!.writeByte(if (fullRefresh) 0 else 1) // incremental flag
             outputStream!!.writeShort(0) // X coordinate
@@ -266,7 +269,7 @@ class VNCClient(val hostname: String, val port: Int) {
 
         // Get message type
         val msgType = input.readByte().toInt()
-        logger.info("receiveMessage $msgType")
+//        logger.info("receiveMessage $msgType")
         if (msgType == RFBConstants.ServerToClientMessageType.FramebufferUpdate)
             receiveFramebufferUpdate(input, output)
         else
@@ -290,7 +293,7 @@ class VNCClient(val hostname: String, val port: Int) {
             val encodingType = input.readInt()
 
             // Check encoding
-            logger.info("receiveFramebufferUpdate x=$x y=$y width=$width height=$height encodingType=$encodingType")
+//            logger.info("receiveFramebufferUpdate x=$x y=$y width=$width height=$height encodingType=$encodingType")
             if (encodingType == RFBConstants.Encoding.Raw)
                 framebuffer!!.readIncomingRaw(input, x, y, width, height)
             else
@@ -304,8 +307,8 @@ class VNCClient(val hostname: String, val port: Int) {
 
         // If no updates received, wait for the frame rate counter
 //        if (rectangleCount == 0)
-//            Thread.sleep(1000 / frameRate.toLong())
-        Thread.sleep(1000)
+            Thread.sleep(1000 / frameRate.toLong())
+//        Thread.sleep(1000)
 
         // Request another frame
         requestNextFrame()

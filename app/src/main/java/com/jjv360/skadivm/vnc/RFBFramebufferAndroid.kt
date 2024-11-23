@@ -72,15 +72,10 @@ class RFBFramebufferAndroid() : RFBFramebuffer() {
 
         // Decode data
         logger.info("Received update: x=$x y=$y width=$width height=$height data=${data.size}")
+        val intBuffer = ByteBuffer.wrap(data).order(ByteOrder.LITTLE_ENDIAN).asIntBuffer()
         val ints = IntArray(width * height)
-        for (i in ints.indices) {
-            ints[i] =
-                (0xFF shr 0) or
-                (data[i * 4 + 0].toInt() shr 8) or
-                (data[i * 4 + 1].toInt() shr 16) or
-                (data[i * 4 + 2].toInt() shr 24)
-//            if (ints[i] != 0xFF) println("${ints[i]}")
-        }
+        for (i in ints.indices)
+            ints[i] = (0xFF shl 24) or intBuffer[i]
 
         // Create bitmap
         val rectBitmap = Bitmap.createBitmap(ints, width, height, Bitmap.Config.ARGB_8888)
