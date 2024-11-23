@@ -4,13 +4,10 @@ import android.content.Intent
 import android.os.Handler
 import android.os.Looper
 import com.jjv360.skadivm.commands.VMCommand
+import com.jjv360.skadivm.qemu.Qemu
 import com.jjv360.skadivm.services.MonitorService
 import com.jjv360.skadivm.utils.ArgumentTokenizer
-import okhttp3.internal.notifyAll
-import okhttp3.internal.wait
 import java.io.File
-import java.io.FileOutputStream
-import java.net.URL
 
 /** Runs a set of commands in context of a VM. This should be called from a background thread. */
 class VMCommandRunner(val vm : VM) {

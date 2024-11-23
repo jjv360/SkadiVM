@@ -1,19 +1,11 @@
 package com.jjv360.skadivm.commands
 
-import com.beust.klaxon.JsonObject
-import com.beust.klaxon.Klaxon
-import com.jjv360.skadivm.logic.Qemu
-import com.jjv360.skadivm.logic.QemuQMPMonitor
+import com.jjv360.skadivm.qemu.Qemu
+import com.jjv360.skadivm.qemu.QemuQMPMonitor
 import com.jjv360.skadivm.logic.VMCommandRunner
-import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.MainScope
 import kotlinx.coroutines.launch
-import kotlinx.coroutines.runBlocking
-import kotlinx.coroutines.withContext
-import java.io.BufferedReader
 import java.io.File
-import java.io.StringReader
-import java.net.ServerSocket
 import java.nio.charset.Charset
 
 /** Run qemu-system-* to launch and manage the VM */
@@ -56,7 +48,7 @@ class VMCommandQemuSystem : VMCommand() {
         updatedArgs.add("-display")
         updatedArgs.add("none")
         updatedArgs.add("-vnc")
-        updatedArgs.add(":5900")
+        updatedArgs.add(":0")
 
         // Use stdio for the QMP connection
         updatedArgs.add("-qmp")

@@ -71,9 +71,6 @@ dependencies {
     debugImplementation(libs.androidx.ui.tooling)
     debugImplementation(libs.androidx.ui.test.manifest)
 
-    // VNC client
-    implementation("com.shinyhut:vernacular:1.14")
-
     // Lottie animations
     implementation("com.airbnb.android:lottie-compose:6.6.0")
 

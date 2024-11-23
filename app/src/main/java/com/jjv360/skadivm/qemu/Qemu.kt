@@ -1,4 +1,4 @@
-package com.jjv360.skadivm.logic
+package com.jjv360.skadivm.qemu
 
 import android.content.Context
 import com.jjv360.skadivm.utils.extractZip

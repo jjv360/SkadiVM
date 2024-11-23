@@ -33,6 +33,7 @@ import com.airbnb.lottie.compose.rememberLottieComposition
 import com.jjv360.skadivm.ui.theme.SkadiVMTheme
 import com.jjv360.skadivm.logic.VM
 import com.jjv360.skadivm.logic.VMManager
+import com.jjv360.skadivm.ui.VNCView
 import kotlinx.coroutines.delay
 
 /** Popup activity to create a VM */
@@ -97,6 +98,7 @@ fun RunVMComponent(vm: VM) {
     var overlayStatus by remember { mutableStateOf(vm.overlayStatus) }
     var overlaySubStatus by remember { mutableStateOf(vm.overlaySubStatus) }
     var vmError by remember { mutableStateOf(vm.error) }
+    var vncPort by remember { mutableStateOf(vm.vncInfo?.port ?: 0) }
     LaunchedEffect(vm) {
 
         // Check state constantly while the VM is active
@@ -105,6 +107,7 @@ fun RunVMComponent(vm: VM) {
             overlayStatus = vm.overlayStatus
             overlaySubStatus = vm.overlaySubStatus
             vmError = vm.error
+            vncPort = vm.vncInfo?.port ?: 0
 
             // Don't do this too quickly
             // TODO: Better way of updating state from a non-Composable?
@@ -124,6 +127,11 @@ fun RunVMComponent(vm: VM) {
         Scaffold(
 
         ) { padding ->
+
+            // If we have a VNC port, show it
+            if (vncPort > 0) {
+                VNCView("localhost", vncPort)
+            }
 
             // Check if overlay should be visible. It's visible if the VM's overlayStatus has no text in it.
             if (overlayStatus.isNotBlank()) {
@@ -165,11 +173,6 @@ fun RunVMComponent(vm: VM) {
 
                 }
 
-            }
-
-            // If we have a VNC port, show it
-            if (vm.vncInfo != null) {
-                println("qemu-system: VNC!!")
             }
 
         }

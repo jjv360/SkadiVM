@@ -1,4 +1,4 @@
-package com.jjv360.skadivm.logic
+package com.jjv360.skadivm.qemu
 
 import com.beust.klaxon.JsonObject
 import com.beust.klaxon.Klaxon
@@ -88,7 +88,7 @@ class QemuQMPMonitor(val reader: BufferedReader, val writer: BufferedWriter) {
             if (cmdID.isBlank()) {
 
                 // This is an event
-                println("qemu-system monitor event: $json")
+//                println("qemu-system monitor event: $json")
                 continue
 
             }

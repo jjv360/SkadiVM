@@ -1,6 +1,6 @@
 package com.jjv360.skadivm.commands
 
-import com.jjv360.skadivm.logic.Qemu
+import com.jjv360.skadivm.qemu.Qemu
 import com.jjv360.skadivm.logic.VMCommandRunner
 import java.io.File
 

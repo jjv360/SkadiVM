@@ -5,7 +5,8 @@ import android.os.Handler
 import android.os.Looper
 import android.widget.Toast
 import com.charleskorn.kaml.Yaml
-import com.jjv360.skadivm.utils.ArgumentTokenizer
+import com.jjv360.skadivm.qemu.QemuQMPMonitor
+import com.jjv360.skadivm.qemu.QemuQueryVNCResponse
 import kotlinx.serialization.decodeFromString
 import kotlinx.serialization.encodeToString
 import java.io.File
