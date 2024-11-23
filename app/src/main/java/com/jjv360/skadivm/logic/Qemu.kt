@@ -9,7 +9,7 @@ class Qemu(private val ctx: Context) {
 
     /** Get Qemu resource path */
     val qemuResourcePath
-        get() = File(ctx.cacheDir, "qemu-assets-v9.1-3")
+        get() = File(ctx.cacheDir, "qemu-assets-v9.1-5")
 
     /** Get list of supported architectures for emulation */
     fun getEmulationArchitectures(): ArrayList<String> {
@@ -42,6 +42,15 @@ class Qemu(private val ctx: Context) {
         // Check if Qemu has been extracted already
         if (qemuResourcePath.exists())
             return
+
+        // Remove old qemu assets folders
+        if (ctx.cacheDir.exists()) {
+            for (f in ctx.cacheDir.listFiles() ?: arrayOf()) {
+                if (f.name.startsWith("qemu-assets-")) {
+                    f.deleteRecursively()
+                }
+            }
+        }
 
         // Create folder
         println("Extracting Qemu...")

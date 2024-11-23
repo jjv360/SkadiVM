@@ -69,6 +69,7 @@ class VMManager private constructor() {
 
             // Exists! Create and return it
             val vm = VM(manager = this, id = id, path = folder, template = templates.first(), ctx = ctx.applicationContext)
+            vm.load()
             return vm
 
         } catch (err: Throwable) {

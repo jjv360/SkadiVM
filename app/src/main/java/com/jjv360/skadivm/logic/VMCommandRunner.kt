@@ -3,8 +3,11 @@ package com.jjv360.skadivm.logic
 import android.content.Intent
 import android.os.Handler
 import android.os.Looper
+import com.jjv360.skadivm.commands.VMCommand
 import com.jjv360.skadivm.services.MonitorService
 import com.jjv360.skadivm.utils.ArgumentTokenizer
+import okhttp3.internal.notifyAll
+import okhttp3.internal.wait
 import java.io.File
 import java.io.FileOutputStream
 import java.net.URL
@@ -12,24 +15,17 @@ import java.net.URL
 /** Runs a set of commands in context of a VM. This should be called from a background thread. */
 class VMCommandRunner(val vm : VM) {
 
-    /** Statics */
-    companion object {
-
-        /** Operations */
-        val commands = mapOf<String, (runner: VMCommandRunner, args: List<String>) -> Unit>(
-            "echo"                      to { runner, args -> opEcho(runner, args) },
-            "qemu-img"                  to { runner, args -> opQemuImg(runner, args) },
-            "internal:markInstalled"    to { runner, args -> opInternalMarkInstalled(runner, args) },
-            "download"                  to { runner, args -> opDownload(runner, args) },
-        )
-
-    }
-
     /** Access to the main thread */
     val mainThreadHandler = Handler(Looper.getMainLooper())
 
+    /** Executed commands */
+    val executedCommands = mutableListOf<VMCommand>()
+
     /** Start running */
     fun start() {
+
+        // Register built-in commands
+
 
         // Start the foreground service to keep this thread running
         mainThreadHandler.post {
@@ -90,30 +86,34 @@ class VMCommandRunner(val vm : VM) {
         val cmd = cmdline[0]
         val args = cmdline.subList(1, cmdline.size)
 
-        // Fail if command doesn't exist
-        if (!commands.containsKey(cmd))
-            throw Exception("Unknown command: $cmd")
+        // Get command runner and clone it
+        val executor = VMCommand.get(cmd)?.clone() ?: throw Exception("Unknown command: $cmd")
+
+        // Store it
+        executedCommands.add(executor)
 
         // Run command
-        val cmdOp = commands[cmd]!!
-        cmdOp(this, args)
+        executor.run(this, cmd, args)
 
     }
 
     /** Cleanup after all commands have finished */
     fun finish() {
 
-
+        // Clean up commands
+        for (cmd in executedCommands)
+            cmd.finish(this)
 
     }
 
-    /** Execute a process and listen for each output line, and return the exit code. */
-    fun executeProcessWithLines(workingDir: File, exe: File, args: List<String>, onLine: (line: String) -> Unit = {}): Int {
+    /** Execute a process */
+    fun executeProcess(workingDir: File, exe: File, args: List<String>): Process {
 
         // Build process
         val builder = ProcessBuilder()
         builder.directory(workingDir)
         builder.command(exe.absolutePath, *args.toTypedArray())
+        builder.redirectErrorStream(true)
 
         // Add our lib directory to the linker directories so it can find dynamic libs
         val existingLibPath = System.getenv("LD_LIBRARY_PATH")
@@ -121,6 +121,7 @@ class VMCommandRunner(val vm : VM) {
         builder.environment()["LD_LIBRARY_PATH"] = "$ourLibPath:$existingLibPath"
 
         // Start the process
+        println("Executing: $exe $args")
         val process = builder.start()
 
         // Ensure that if our process dies, then so does this process
@@ -131,14 +132,20 @@ class VMCommandRunner(val vm : VM) {
             }
         })
 
-        // Print output
-        process.inputStream.bufferedReader().forEachLine {
-            println(onLine(it))
-        }
+        // Done
+        return process
 
-        // Print error
-        process.errorStream.bufferedReader().forEachLine {
-            println(onLine(it))
+    }
+
+    /** Execute a process and listen for each output line, and return the exit code. */
+    fun executeProcessWithLines(workingDir: File, exe: File, args: List<String>, onLine: (line: String) -> Unit = {}): Int {
+
+        // Start the process
+        val process = executeProcess(workingDir, exe, args)
+
+        // Read input stream
+        process.inputStream.bufferedReader().forEachLine {
+            onLine(it)
         }
 
         // Wait for process to exit
@@ -146,113 +153,4 @@ class VMCommandRunner(val vm : VM) {
 
     }
 
-}
-
-/** Display overlay on the screen to indicate progress */
-fun opEcho(runner: VMCommandRunner, args: List<String>) {
-
-    // Update UI
-    val text = args.joinToString(" ")
-    runner.vm.overlayStatus = text
-    runner.vm.overlaySubStatus = ""
-
-}
-
-/** Run qemu-img */
-fun opQemuImg(runner: VMCommandRunner, args: List<String>) {
-
-    // Ensure assets are extracted
-    val qemu = Qemu(runner.vm.ctx)
-    qemu.extractQemuAssets()
-
-    // Run command
-    val workDir = runner.vm.path
-    val exe = File(runner.vm.ctx.applicationInfo.nativeLibraryDir, "libqemu-img.so")
-    val exitCode = runner.executeProcessWithLines(workDir, exe, args) {
-
-        // If line has content, show it
-        println("qemu-img: $it")
-        if (it.isNotBlank()) {
-            runner.vm.overlaySubStatus = it
-        }
-
-    }
-
-    // Done
-    runner.vm.overlaySubStatus = ""
-
-    // Check exit code
-    if (exitCode != 0)
-        throw Exception("qemu-img failed with exit code $exitCode")
-
-}
-
-/** Marks the VM as having finished installation */
-fun opInternalMarkInstalled(runner: VMCommandRunner, args: List<String>) {
-    runner.vm.isInstalled = true
-}
-
-/** Download a file */
-fun opDownload(runner: VMCommandRunner, args: List<String>) {
-
-    // Start download
-    runner.vm.overlaySubStatus = "Downloading..."
-    val file = File(runner.vm.path, args[0])
-    val url = URL(args[1])
-
-    // Ensure directory exists
-    file.parentFile!!.mkdirs()
-
-    // Open URL connection
-    val urlConnection = url.openConnection()
-
-    // Get file size
-    val totalSize = urlConnection.contentLengthLong
-
-    // Open stream
-    urlConnection.getInputStream().use { inputStream ->
-
-        // Open connection to file
-        FileOutputStream(file).use { outputStream ->
-
-            // Pipe it across
-            val buffer = ByteArray(1024*1024)
-            var amountLoaded = 0L
-            while (true) {
-
-                // Load next chunk
-                val amount = inputStream.read(buffer)
-                if (amount == -1)
-                    break
-
-                // Write it out
-                outputStream.write(buffer, 0, amount)
-
-                // Update UI
-                amountLoaded += amount
-                if (totalSize == -1L)
-                    runner.vm.overlaySubStatus = "Downloading ${bytesToHumanReadableSize(amountLoaded)}"
-                else
-                    runner.vm.overlaySubStatus = "Downloading ${bytesToHumanReadableSize(amountLoaded)} of ${bytesToHumanReadableSize(totalSize)}"
-
-                // Log
-//                println("[VM ${runner.vm.id}] ${runner.vm.overlaySubStatus}")
-
-            }
-
-        }
-    }
-
-    // Done
-    runner.vm.overlaySubStatus = ""
-    println("[VM ${runner.vm.id}] Download complete")
-
-}
-
-// Convert byte size to readable string
-fun bytesToHumanReadableSize(bytes: Long) = when {
-    bytes >= 1024*1024*1024 -> "%.2f GB".format(bytes.toDouble() / (1024*1024*1024))
-    bytes >= 1024*1024 -> "%.2f MB".format(bytes.toDouble() / (1024*1024))
-    bytes >= 1024 -> "%.2f KB".format(bytes.toDouble() / (1024))
-    else -> "$bytes B"
 }

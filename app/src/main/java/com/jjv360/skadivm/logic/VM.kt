@@ -126,6 +126,9 @@ class VM(
     /** Access to the main thread */
     val mainThreadHandler = Handler(Looper.getMainLooper())
 
+    /** While Qemu is running, this contains the QMP interface. */
+    var qemuInterface: QemuQMPMonitor? = null
+
     /** THREAD: Start the thread */
     private fun threadStart() {
 
@@ -189,5 +192,8 @@ class VM(
         overlaySubStatus = ""
 
     }
+
+    /** VNC connection info */
+    var vncInfo : QemuQueryVNCResponse? = null
 
 }

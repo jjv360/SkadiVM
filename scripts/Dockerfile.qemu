@@ -314,8 +314,13 @@ RUN /bin/bash <<EOF # Clean
 EOF
 
 # Zip Qemu's assets, just use the ones from the ARM64 build since they are the same for all builds
-WORKDIR /
-RUN zip -r --verbose --junk-paths qemu-assets.zip "/sysroot/aarch64/share/qemu"
+RUN /bin/bash <<EOF # Saving Qemu assets
+    
+    # Zip the assets
+    cd "/sysroot/aarch64/share/qemu"
+    zip -r --verbose /qemu-assets.zip .
+
+EOF
 
 # At this point, the following files should exist:
 # /sysroot/<target-arch>/bin/qemu-system-<emulated-arch> - The binaries

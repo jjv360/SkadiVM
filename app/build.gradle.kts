@@ -84,4 +84,7 @@ dependencies {
     implementation("io.coil-kt.coil3:coil-compose:3.0.3")
     implementation("io.coil-kt.coil3:coil-network-okhttp:3.0.3")
 
+    // JSON support
+    implementation("com.beust:klaxon:5.5")
+
 }

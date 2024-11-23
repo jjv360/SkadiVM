@@ -167,6 +167,11 @@ fun RunVMComponent(vm: VM) {
 
             }
 
+            // If we have a VNC port, show it
+            if (vm.vncInfo != null) {
+                println("qemu-system: VNC!!")
+            }
+
         }
 
     }
