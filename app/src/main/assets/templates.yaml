@@ -17,20 +17,51 @@
 # - ${qemu.path} - Path to the Qemu assets, such as ROMs etc
 # - ${vm.path} - Path to the user's VM folder
 
+
+# Windows 3.1 template
+win3.1:
+
+    # Template info
+    id: com.jjv360.vm.win31
+    name: Windows 3.1
+    description: Emulated Intel 486 CPU with 16MB of memory and a 256MB hard drive.
+    icon: file:///android_asset/icons/windows-98.png
+
+    # Tasks to run when installing
+    installTasks:
+        - "echo Downloading disk 1..."
+        - "download DISK01.IMG https://storage.googleapis.com/jjv360-cdn/skadivm/win3.1/DISK01.IMG"
+        - "echo Downloading disk 2..."
+        - "download DISK02.IMG https://storage.googleapis.com/jjv360-cdn/skadivm/win3.1/DISK02.IMG"
+        - "echo Downloading disk 3..."
+        - "download DISK03.IMG https://storage.googleapis.com/jjv360-cdn/skadivm/win3.1/DISK03.IMG"
+        - "echo Downloading disk 4..."
+        - "download DISK04.IMG https://storage.googleapis.com/jjv360-cdn/skadivm/win3.1/DISK04.IMG"
+        - "echo Downloading disk 5..."
+        - "download DISK05.IMG https://storage.googleapis.com/jjv360-cdn/skadivm/win3.1/DISK05.IMG"
+        - "echo Downloading disk 6..."
+        - "download DISK06.IMG https://storage.googleapis.com/jjv360-cdn/skadivm/win3.1/DISK06.IMG"
+        - "echo Downloading disk 7..."
+        - "download DISK07.IMG https://storage.googleapis.com/jjv360-cdn/skadivm/win3.1/DISK07.IMG"
+        - "echo Creating C: drive..."
+        - "qemu-img create -f qcow2 drive_c.qcow2 256M"
+
+    # Tasks to run when starting the VM
+    runTasks:
+        - "echo Starting Windows 3.1..."
+        - "qemu-system-i386 -cpu 486 -hda drive_c.qcow2 -fda DISK01.IMG -m 16 -device sb16 -vga vmware -usb -device usb-tablet" # -nic user,model=rtl8139,ipv6=off
+
+
+
 # Windows 98 template
 # See: https://computernewb.com/wiki/QEMU/Guests/Windows_98
 win98:
 
-    # Template info when displayed to the user
+    # Template info
     id: com.jjv360.vm.win98
     name: Windows 98
     description: Emulated i386 CPU with 256MB of memory and a 4GB hard drive.
     icon: file:///android_asset/icons/windows-98.png
-
-    # Requirements in order to use this VM
-    requires:
-        - qemu-img
-        - qemu-system-i386
 
     # Custom properties can be accessed with ${keyExample} etc
     props:
@@ -39,11 +70,35 @@ win98:
     # Tasks to run when installing
     installTasks:
         - "echo Downloading ISO..."
-        #- "download win98se.iso https://archive.org/download/windows-98-se-retail/Windows%2098%20SE%20%28Retail%29.iso"
+        - "download win98se.iso https://storage.googleapis.com/jjv360-cdn/skadivm/win98se.iso"
         - "echo Creating C: drive..."
         - "qemu-img create -f qcow2 drive_c.qcow2 4G"
 
-    # Tasks to run when starting the VM -cdrom win98se.iso
+    # Tasks to run when starting the VM
     runTasks:
         - "echo Starting Windows 98..."
-        - "qemu-system-i386 -hda drive_c.qcow2 -m 256"
+        - "qemu-system-i386 -hda drive_c.qcow2 -m 256 -cdrom win98se.iso -device sb16 -vga vmware -usb -device usb-tablet"
+
+
+
+
+# Ubuntu 24 template
+ubuntu24:
+
+    # Template info
+    id: com.jjv360.vm.ubuntu24
+    name: Ubuntu 24
+    description: ARM64 CPU with 2GB of memory and a 32GB hard drive.
+    icon: file:///android_asset/icons/ubuntu.webp
+
+    # Tasks to run when installing
+    installTasks:
+        - "echo Downloading ISO..."
+        - "download ubuntu.iso https://cdimage.ubuntu.com/releases/24.10/release/ubuntu-24.10-desktop-arm64.iso"
+        - "echo Creating main drive..."
+        - "qemu-img create -f qcow2 main_drive.qcow2 32G"
+
+    # Tasks to run when starting the VM
+    runTasks:
+        - "echo Starting Ubuntu..."
+        - "qemu-system-aarch64 -hda main_drive.qcow2 -m 2048 -machine virt -cpu max -bios edk2-aarch64-code.fd -cdrom ubuntu.iso -vga vmware"

@@ -200,6 +200,7 @@ class VNCClient(val hostname: String, val port: Int) {
 //            RFBConstants.Encoding.ZRLE,
 //            RFBConstants.Encoding.CopyRect,
             RFBConstants.Encoding.Raw,
+            RFBConstants.Encoding.PseudoDesktopSize,
         )
 
         // Send supported encodings

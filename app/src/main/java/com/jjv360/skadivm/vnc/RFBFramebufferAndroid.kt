@@ -71,7 +71,7 @@ class RFBFramebufferAndroid() : RFBFramebuffer() {
     override fun updateRect(x: Int, y: Int, width: Int, height: Int, data: ByteArray) {
 
         // Decode data
-        logger.info("Received update: x=$x y=$y width=$width height=$height data=${data.size}")
+//        logger.info("Received update: x=$x y=$y width=$width height=$height data=${data.size}")
         val intBuffer = ByteBuffer.wrap(data).order(ByteOrder.LITTLE_ENDIAN).asIntBuffer()
         val ints = IntArray(width * height)
         for (i in ints.indices)

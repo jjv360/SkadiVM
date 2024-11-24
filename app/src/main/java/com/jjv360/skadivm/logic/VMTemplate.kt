@@ -28,10 +28,10 @@ data class VMTemplate(
     var icon: String?,
 
     /** List of requirements in order to use this VM */
-    var requires: List<String>?,
+    var requires: List<String>? = null,
 
     /** Custom properties specified in the yaml config */
-    var props: Map<String, String>?,
+    var props: Map<String, String>? = null,
 
     /** Tasks to run when installing the VM */
     var installTasks: List<String>?,

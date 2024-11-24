@@ -1,5 +1,7 @@
 # SkadiVM
 
+![](https://img.shields.io/badge/status-incomplete-darkred)
+
 A tool for running virtual machines on Android. Can run on x86_64 and ARM64 devices, and supports any number of emulated architectures.
 
 ## Development
